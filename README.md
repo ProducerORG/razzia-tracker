@@ -1,4 +1,4 @@
-# Razzia-tracker – Scrapingbasierte Visualisierung von Glücksspiel-Razzien 
+# Razzia-Tracker
 
 ## Struktur
 

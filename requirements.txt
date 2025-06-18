@@ -1,9 +1,0 @@
-requests
-beautifulsoup4
-spacy
-fastapi
-uvicorn[standard]
-aiohttp
-geopy
-supabase
-httpx

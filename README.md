@@ -1,57 +1,71 @@
-# Razzienkarte – Scrapingbasierte Visualisierung von Glücksspiel-Razzien
+# Razzia-tracker – Scrapingbasierte Visualisierung von Glücksspiel-Razzien 
 
-Ein vollständiges Projekt zur automatisierten Erfassung, Analyse und Darstellung von Polizeimeldungen im Zusammenhang mit illegalem Glücksspiel.
+## Struktur
 
-## Funktionen
-- Automatisches Scraping aktueller Presseartikel (Presseportal)
-- Keyword- und Ortserkennung (spaCy)
-- Geokodierung über OpenStreetMap (Nominatim)
-- Speicherung in SQLite
-- REST-API via FastAPI
-- Interaktive Leaflet-Karte mit zeitlich codierten Markern
-
-## Projektstruktur
-
-- `scraper/`: Python-Skript zum Scrapen und Verarbeiten der Daten
-- `api/`: FastAPI-Backend zur Bereitstellung der Daten als JSON
-- `frontend/`: HTML + JavaScript (Leaflet.js) für die Kartendarstellung
-- `db/`: SQLite-Datenbank und SQL-Schema
-- `.github/workflows/`: GitHub Actions Workflow für automatische Ausführung
-
-## Setup lokal
-
-### Voraussetzungen
-- Python 3.10+
-- Internetzugang
-
-### Installation
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python -m spacy download de_core_news_sm
-sqlite3 db/razzien.db < db/schema.sql
+```
+├── README.md
+├── api
+│   └── index.php
+├── scraper
+│   └── scraper.php
+├── docs
+│   ├── index.html
+│   └── map.js
 ```
 
-### Scraper ausführen
-```bash
-python scraper/scrape.py
+## Setup auf Webhoster (PHP 8.3.2)
+
+### Voraussetzungen
+
+- PHP 8.3.2 (mindestens 8.0)
+- Zugriff auf Cronjobs für den Scraper (empfohlen)
+- Umgebungsvariablen müssen gesetzt werden können, s.u. (z.B. .env-Datei, Hoster-Konfiguration o.ä.)
+
+### Konfiguration
+
+Umgebungsvariablen anlegen (z.B. in `.htaccess`, `.env` oder im Hoster-Interface):
+
+```
+SUPABASE_URL="https://rbxjghygifiaxgfpybgz.supabase.co"
+SUPABASE_KEY=(...ZU ÜBERMITTELN)
 ```
 
 ### API starten
-```bash
-uvicorn api.main:app --reload --host 127.0.0.1 --port 8000
+
+Den Ordner `api/` via Webserver erreichbar machen. Beispiel:
+
+```
+https://server.de/api/index.php/api/raids
+```
+
+Am Besten mit einer `.htaccess` Rewrite-Rule arbeiten:
+
+**Beispiel `.htaccess` in `api/`:**
+
+```
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteRule ^(.*)$ index.php [QSA,L]
+```
+
+Dann genügt Aufruf z.B. unter:
+
+```
+https://server.de/api/raids
 ```
 
 ### Frontend öffnen
-Öffne `frontend/index.html` im Browser.
 
-## Kostenlos deployen (Empfehlung)
+Öffne `docs/index.html` 
 
-- **Scraper**: GitHub Actions (3x täglich)
-- **API**: Render.com (kostenloser Web Service)
-- **Frontend**: GitHub Pages
-- **Geodaten**: OpenStreetMap (Nominatim mit 1s Delay pro Anfrage)
+### Scraper manuell ausführen
 
-## Lizenz
-MIT-Lizenz
++++TODO
+
+#### Scraper automatisch
+
++++TODO
+
+### Hinweis zum Geocoding
+
+`User-Agent` in der Funktion `geocodeLocation()` nicht entfernen, um die OSM API-Richtlinien einzuhalten.

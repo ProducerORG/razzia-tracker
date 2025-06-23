@@ -65,6 +65,15 @@
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
+            position: relative;
+        }
+
+        .info-panel .top-right-info {
+            position: absolute;
+            top: 1.5rem;
+            right: 1.5rem;
+            font-size: 0.9rem;
+            color: var(--text-dark);
         }
 
         input[type="date"] {
@@ -109,6 +118,38 @@
             background-color: #004d00;
         }
 
+        .federal-item {
+            cursor: pointer;
+            margin-bottom: 0.3rem;
+            padding: 0.4rem;
+            border: 1px solid #ccc;
+            background-color: #ffffff;
+            border-radius: 4px;
+            font-size: 0.95rem;
+            user-select: none;
+        }
+
+        .federal-item.active {
+            background-color: #bfa46f;
+            color: white;
+        }
+
+        #toggleFederalButton {
+            padding: 0.6rem 1rem;
+            font-size: 1rem;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--white);
+            color: var(--text-dark);
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        #toggleFederalButton:hover {
+            background-color: #e6e6e6;
+        }
+
         @media (max-width: 768px) {
             body {
                 flex-direction: column;
@@ -118,7 +159,7 @@
                 height: 400px;
             }
         }
-
+    
     </style>
 </head>
 <body>
@@ -133,12 +174,40 @@
         <div id="map"></div>
     </div>
     <div class="info-panel">
+        <div class="top-right-info">Beobachtung seit 01.07.2025</div>
+
         <h3>Zeitraum filtern</h3>
         <label for="startDate">Von:</label>
         <input type="date" id="startDate">
         <label for="endDate">Bis:</label>
         <input type="date" id="endDate">
-        <br><br><h3>Summe der Einträge</h3>
+        <br><br>
+
+        <h3>Bundesländer filtern</h3>
+        <div id="federalFilterContainer">
+            <button id="toggleFederalButton">Auswählen</button>
+            <div id="federalList" style="display:none; margin-top: 1rem;">
+                <div class="federal-item active" data-name="Baden-Württemberg">✔ Baden-Württemberg</div>
+                <div class="federal-item active" data-name="Bayern">✔ Bayern</div>
+                <div class="federal-item active" data-name="Berlin">✔ Berlin</div>
+                <div class="federal-item active" data-name="Brandenburg">✔ Brandenburg</div>
+                <div class="federal-item active" data-name="Bremen">✔ Bremen</div>
+                <div class="federal-item active" data-name="Hamburg">✔ Hamburg</div>
+                <div class="federal-item active" data-name="Hessen">✔ Hessen</div>
+                <div class="federal-item active" data-name="Mecklenburg-Vorpommern">✔ Mecklenburg-Vorpommern</div>
+                <div class="federal-item active" data-name="Niedersachsen">✔ Niedersachsen</div>
+                <div class="federal-item active" data-name="Nordrhein-Westfalen">✔ Nordrhein-Westfalen</div>
+                <div class="federal-item active" data-name="Rheinland-Pfalz">✔ Rheinland-Pfalz</div>
+                <div class="federal-item active" data-name="Saarland">✔ Saarland</div>
+                <div class="federal-item active" data-name="Sachsen">✔ Sachsen</div>
+                <div class="federal-item active" data-name="Sachsen-Anhalt">✔ Sachsen-Anhalt</div>
+                <div class="federal-item active" data-name="Schleswig-Holstein">✔ Schleswig-Holstein</div>
+                <div class="federal-item active" data-name="Thüringen">✔ Thüringen</div>
+            </div>
+        </div>
+        <br><br>
+
+        <h3>Summe der Einträge</h3>
         <p><span id="entryCount">0</span></p>
         <br><br><h3>Legende</h3>
         <p><div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
@@ -147,16 +216,7 @@
                 <path fill-rule="evenodd" clip-rule="evenodd" d="M24 12C24 18.0965 18.9223 23.1316 13.4384 28.5696C12.961 29.043 12.4805 29.5195 12 30C11.5219 29.5219 11.0411 29.0452 10.5661 28.5741C5.08215 23.1361 0 18.0965 0 12C0 5.37258 5.37258 0 12 0C18.6274 0 24 5.37258 24 12ZM12 16.5C14.4853 16.5 16.5 14.4853 16.5 12C16.5 9.51472 14.4853 7.5 12 7.5C9.51472 7.5 7.5 9.51472 7.5 12C7.5 14.4853 9.51472 16.5 12 16.5Z" fill="#8b1e2e"/>
                 </svg>
             </div>
-            <span>&nbsp;&nbsp;Heute</span>
-            </div>
-
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-            <div style="width: 20px; height: 30px;"> 
-                <svg width="24" height="30" viewBox="0 0 24 30" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M24 12C24 18.0965 18.9223 23.1316 13.4384 28.5696C12.961 29.043 12.4805 29.5195 12 30C11.5219 29.5219 11.0411 29.0452 10.5661 28.5741C5.08215 23.1361 0 18.0965 0 12C0 5.37258 5.37258 0 12 0C18.6274 0 24 5.37258 24 12ZM12 16.5C14.4853 16.5 16.5 14.4853 16.5 12C16.5 9.51472 14.4853 7.5 12 7.5C9.51472 7.5 7.5 9.51472 7.5 12C7.5 14.4853 9.51472 16.5 12 16.5Z" fill="#b3541e"/>
-                </svg>
-            </div>
-            <span>&nbsp;&nbsp;Letzte 3 Tage</span>
+            <span>&nbsp;&nbsp;Automatenspiel</span>
             </div>
 
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
@@ -165,17 +225,26 @@
                 <path fill-rule="evenodd" clip-rule="evenodd" d="M24 12C24 18.0965 18.9223 23.1316 13.4384 28.5696C12.961 29.043 12.4805 29.5195 12 30C11.5219 29.5219 11.0411 29.0452 10.5661 28.5741C5.08215 23.1361 0 18.0965 0 12C0 5.37258 5.37258 0 12 0C18.6274 0 24 5.37258 24 12ZM12 16.5C14.4853 16.5 16.5 14.4853 16.5 12C16.5 9.51472 14.4853 7.5 12 7.5C9.51472 7.5 7.5 9.51472 7.5 12C7.5 14.4853 9.51472 16.5 12 16.5Z" fill="#b89e1d"/>
                 </svg>
             </div>
-            <span>&nbsp;&nbsp;Letzte Woche</span>
+            <span>&nbsp;&nbsp;Wetten</span>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
             <div style="width: 20px; height: 30px;"> 
                 <svg width="24" height="30" viewBox="0 0 24 30" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path fill-rule="evenodd" clip-rule="evenodd" d="M24 12C24 18.0965 18.9223 23.1316 13.4384 28.5696C12.961 29.043 12.4805 29.5195 12 30C11.5219 29.5219 11.0411 29.0452 10.5661 28.5741C5.08215 23.1361 0 18.0965 0 12C0 5.37258 5.37258 0 12 0C18.6274 0 24 5.37258 24 12ZM12 16.5C14.4853 16.5 16.5 14.4853 16.5 12C16.5 9.51472 14.4853 7.5 12 7.5C9.51472 7.5 7.5 9.51472 7.5 12C7.5 14.4853 9.51472 16.5 12 16.5Z" fill="#2c3e75"/>
                 </svg>
             </div>
-            <span>&nbsp;&nbsp;Letzte 14 Tage</span>
+            <span>&nbsp;&nbsp;Online-Spiele</span>
             </div>
+
+            <div style="display: flex; align-items: center; gap: 0.5rem; ">
+            <div style="width: 20px; height: 30px;"> 
+                <svg width="24" height="30" viewBox="0 0 24 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path fill-rule="evenodd" clip-rule="evenodd" d="M24 12C24 18.0965 18.9223 23.1316 13.4384 28.5696C12.961 29.043 12.4805 29.5195 12 30C11.5219 29.5219 11.0411 29.0452 10.5661 28.5741C5.08215 23.1361 0 18.0965 0 12C0 5.37258 5.37258 0 12 0C18.6274 0 24 5.37258 24 12ZM12 16.5C14.4853 16.5 16.5 14.4853 16.5 12C16.5 9.51472 14.4853 7.5 12 7.5C9.51472 7.5 7.5 9.51472 7.5 12C7.5 14.4853 9.51472 16.5 12 16.5Z" fill="#b3541e"/>
+                </svg>
+            </div>
+            <span>&nbsp;&nbsp;Sonstige</span>
+            </div> 
         </p>
     </div>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>

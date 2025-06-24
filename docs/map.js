@@ -1,5 +1,5 @@
 const initialMinZoom = window.innerWidth < 768 ? 3 : 6;
-const initialZoom = window.innerWidth < 768 ? 3 : 6;
+const initialZoom = window.innerWidth < 768 ? 4 : 6;
 
 const map = L.map('map', {
     minZoom: initialMinZoom,
@@ -23,7 +23,7 @@ fetch('bundeslaender.geojson')
         geoLayer = L.geoJSON(data, {
             style: {
                 color: '#333333',
-                weight: 2,
+                weight: 1.5,
                 opacity: 0.8,
                 fillOpacity: 0.3,
                 fillColor: '#cccccc'
@@ -193,3 +193,59 @@ fetch('https://razzia-tracker.onrender.com/api/raids')
         allData = data;
         filterAndRender();
     });
+
+/* MELDEFORMULAR */
+
+document.getElementById("reportForm").addEventListener("submit", async function(e) {
+    e.preventDefault();
+
+    const message = document.getElementById("message").value.trim();
+    const source = document.getElementById("source").value.trim();
+    const captchaResponse = grecaptcha.getResponse();
+    const formResponse = document.getElementById("formResponse");
+    const spinner = document.getElementById("spinner");
+
+    formResponse.innerText = "";
+
+    if (!message || !source) {
+        formResponse.style.color = "red";
+        formResponse.innerText = "Bitte fülle alle Felder aus.";
+        return;
+    }
+
+    if (!captchaResponse) {
+        formResponse.style.color = "red";
+        formResponse.innerText = "Bitte bestätige das CAPTCHA.";
+        return;
+    }
+
+    spinner.style.display = "block";
+
+    const payload = { message, source, captcha: captchaResponse };
+
+    try {
+        const res = await fetch("https://razzia-tracker.onrender.com/api/report", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+
+        spinner.style.display = "none";
+
+        if (res.ok) {
+            formResponse.style.color = "green";
+            formResponse.innerText = "Meldung erfolgreich gesendet!";
+            document.getElementById("reportForm").reset();
+            grecaptcha.reset();
+        } else {
+            formResponse.style.color = "red";
+            formResponse.innerText = "Fehler beim Senden.";
+        }
+    } catch (err) {
+        spinner.style.display = "none";
+        formResponse.style.color = "red";
+        formResponse.innerText = "Serverfehler.";
+    }
+
+    setTimeout(() => { formResponse.innerText = ""; }, 5000);
+});

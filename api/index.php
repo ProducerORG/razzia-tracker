@@ -16,14 +16,23 @@ $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
 if ($path === '/api/raids') {
     handleGetRaids();
+} elseif ($path === '/api/report') {
+    handleReport();
 } else {
     http_response_code(404);
     echo json_encode(['error' => 'Not Found']);
 }
 
+// Supabase-Daten abrufen
 function handleGetRaids() {
     $SUPABASE_URL = getenv("SUPABASE_URL") ?: "https://rbxjghygifiaxgfpybgz.supabase.co";
     $SUPABASE_KEY = getenv("SUPABASE_KEY");
+
+    if (!$SUPABASE_KEY) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Supabase key not set']);
+        exit();
+    }
     
     $url = $SUPABASE_URL . "/rest/v1/raids?select=*";
 
@@ -47,3 +56,81 @@ function handleGetRaids() {
     curl_close($ch);
     echo $response;
 }
+
+// E-Mail-Report verarbeiten
+function handleReport() {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+        echo json_encode(['error' => 'Method Not Allowed']);
+        exit();
+    }
+
+    $data = json_decode(file_get_contents('php://input'), true);
+
+    if (!isset($data['message'], $data['source'], $data['captcha'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Alle Felder müssen ausgefüllt sein.']);
+        exit();
+    }
+
+    $message = trim($data['message']);
+    $source = trim($data['source']);
+
+    if (empty($message) || empty($source)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Ungültige Eingabedaten.']);
+        exit();
+    }
+
+    // E-Mail senden
+    $result = sendEmail($message, $source);
+
+    if ($result !== true) {
+        http_response_code(500);
+        echo json_encode(['error' => $result]);
+        exit();
+    }
+
+    echo json_encode(['status' => 'ok']);
+}
+
+function sendEmail($message, $source) {
+    $SMTP_SERVER = "k75s74.meinserver.io";
+    $SMTP_PORT = 587;
+    $SMTP_USER = "no-reply@glueckswirtschaft.de";
+    $SMTP_PASS = getenv("SMTP_KEY"); // SMTP Passwort aus .env
+
+    if (!$SMTP_PASS) {
+        return "SMTP-Key fehlt.";
+    }
+
+    $to = "linus@producer.works";  // Später auf info@glueckswirtschaft.de ändern
+    $subject = "Neue Razzia-Meldung";
+    $body = "Neue Meldung eingegangen:\n\nMeldung:\n$message\n\nQuelle:\n$source";
+
+    $headers = [
+        'From' => $SMTP_USER,
+        'To' => $to,
+        'Subject' => $subject
+    ];
+
+    // Mail senden via SMTP (PHPMailer wäre hier eleganter, aber ich halte es wie dein bisheriger Stil)
+    require_once 'vendor/autoload.php'; // Nur falls du Composer verwendest
+    $smtp = new Swift_SmtpTransport($SMTP_SERVER, $SMTP_PORT, 'tls');
+    $smtp->setUsername($SMTP_USER);
+    $smtp->setPassword($SMTP_PASS);
+    $mailer = new Swift_Mailer($smtp);
+
+    $messageObj = (new Swift_Message($subject))
+        ->setFrom([$SMTP_USER => 'Razzia-Tracker'])
+        ->setTo([$to])
+        ->setBody($body);
+
+    try {
+        $result = $mailer->send($messageObj);
+        return true;
+    } catch (Exception $e) {
+        return "E-Mail Fehler: " . $e->getMessage();
+    }
+}
+?>

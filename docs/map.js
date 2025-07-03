@@ -120,7 +120,7 @@ function filterAndRender() {
     const positionOffsetMap = new Map();
 
     allData.forEach(entry => {
-        if (!selectedFederals.includes(entry.federal)) return;
+        if (entry.federal && !selectedFederals.includes(entry.federal)) return;
         const lat = parseFloat(entry.lat);
         const lon = parseFloat(entry.lon);
         if (isNaN(lat) || isNaN(lon)) return;

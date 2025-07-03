@@ -12,7 +12,7 @@ function loadEnv($path) {
     }
 }
 
-loadEnv(__DIR__ . '/.env');
+loadEnv(__DIR__ . '/../.env');
 
 $recaptchaKey = getenv('RECAPTCHA_SITE_KEY') ?: '';
 $apiUrl = getenv('API_URL') ?: '';

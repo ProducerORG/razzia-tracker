@@ -7,6 +7,7 @@ $dotenv->load();
 
 // Konfiguration aus .env
 $KEYWORDS = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
+$KEYWORDS = ['Drogen'];
 $NEWS_URL = $_ENV['NEWS_URL'] ?? 'https://www.presseportal.de/blaulicht';
 $SUPABASE_URL = $_ENV['SUPABASE_URL'] ?? '';
 $SUPABASE_KEY = $_ENV['SUPABASE_KEY'] ?? '';
@@ -14,29 +15,47 @@ $SUPABASE_KEY = $_ENV['SUPABASE_KEY'] ?? '';
 echo "[INFO] News-URL: $NEWS_URL\n";
 echo "[INFO] Schlüsselwörter: " . implode(', ', $KEYWORDS) . "\n";
 
-$html = file_get_contents($NEWS_URL);
-if (!$html) {
-    exit("[ERROR] Fehler beim Laden der News-Seite\n");
-}
-
-libxml_use_internal_errors(true);
-$dom = new DOMDocument();
-$dom->loadHTML($html);
-$xpath = new DOMXPath($dom);
-$nodes = $xpath->query("//a[contains(@class,'teaser-title')]");
-
-echo "[INFO] Gefundene Artikel: " . $nodes->length . "\n";
-
 $articles = [];
-foreach ($nodes as $node) {
-    $title = trim($node->textContent);
-    $href = $node->getAttribute("href");
-    $fullUrl = "https://www.presseportal.de$href";
-    echo "[DEBUG] Artikel erfasst: $title\n";
-    $articles[] = ["title" => $title, "url" => $fullUrl];
-    if (count($articles) >= 10) break;
+$pageCount = 25;
+$step = 30;
+
+for ($i = 0; $i < $pageCount; $i++) {
+    $offset = $i * $step;
+    $url = $NEWS_URL;
+    if ($offset > 0) {
+        $url .= "/$offset";
+    }
+
+    echo "[INFO] Lade Seite: $url\n";
+    $html = file_get_contents($url);
+    if (!$html) {
+        echo "[WARN] Fehler beim Laden: $url\n";
+        continue;
+    }
+
+    $dom = new DOMDocument();
+    @$dom->loadHTML($html);
+    $xpath = new DOMXPath($dom);
+    $nodes = $xpath->query("//a[contains(@href, '/blaulicht/pm/')]");
+
+    echo "[INFO] Artikel auf Seite ($offset): " . $nodes->length . " (nur Links, keine Filterung)\n";
+
+    $seenUrls = [];
+    foreach ($nodes as $node) {
+        $title = trim($node->textContent);
+        $href = $node->getAttribute("href");
+        $fullUrl = (strpos($href, 'http') === 0) ? $href : "https://www.presseportal.de$href";
+    
+        if (isset($seenUrls[$fullUrl])) continue; // Duplikat
+        $seenUrls[$fullUrl] = true;
+    
+        $articles[] = ["title" => $title, "url" => $fullUrl];
+    }
+
+    usleep(500000); // 0.5 Sekunden warten, um Server nicht zu belasten
 }
 
+// Artikel verarbeiten
 foreach ($articles as $article) {
     echo "[INFO] Verarbeite Artikel: {$article['title']}\n";
 
@@ -47,7 +66,7 @@ foreach ($articles as $article) {
     }
 
     $dom2 = new DOMDocument();
-    @$dom2->loadHTML($contentHtml); // Unterdrückt Warnungen
+    @$dom2->loadHTML($contentHtml);
     $xpath2 = new DOMXPath($dom2);
     $paragraphs = $xpath2->query("//div[contains(@class,'article-text')]//p");
 
@@ -161,3 +180,6 @@ function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url) {
     }
     curl_close($ch);
 }
+
+
+echo "[INFO] Gesamt verarbeitete Artikel mit passendem Keyword: $relevantCount\n";

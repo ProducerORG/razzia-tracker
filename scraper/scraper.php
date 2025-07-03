@@ -131,8 +131,18 @@ foreach ($articles as $article) {
     }
 
     // Datum extrahieren
-    $dateNode = $xpath2->query("//div[contains(@class,'article-text')]//span[contains(@class,'news-headline__date')] | //div[contains(@class,'news-headline')]//span");
-    $dateRaw = $dateNode->length > 0 ? trim($dateNode->item(0)->textContent) : null;
+    // Datum extrahieren (divs mit Zeitangabe im Header oder Haupttext)
+    $dateRaw = null;
+
+    // Suche nach einem typischen Zeitformat z. B. 03.07.2025 – 12:16
+    $dateCandidates = $xpath2->query("//div[contains(text(), '–') or contains(text(), '–')]");
+    foreach ($dateCandidates as $node) {
+        $text = trim($node->textContent);
+        if (preg_match('/\d{2}\.\d{2}\.\d{4}/', $text)) {
+            $dateRaw = $text;
+            break;
+        }
+    }
 
     $date = null;
     if ($dateRaw && preg_match('/(\d{2})\.(\d{2})\.(\d{4})/', $dateRaw, $matches)) {

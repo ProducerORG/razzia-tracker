@@ -6,7 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Inter&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    <!-- <script src="https://www.google.com/recaptcha/api.js" async defer></script> -->
+    <script src="https://www.google.com/recaptcha/api.js?render=6Ld4Ym0rAAAAADOulRfKmGerdUSWYfxptXjFDLev"></script>
+
     <style>
         :root {
             --gold: #bfa46f;
@@ -202,17 +204,15 @@
                         style="box-sizing: border-box; width: 100%; padding: 0.6rem; border: 1px solid #ccc; border-radius: 4px; font-family: 'Inter', sans-serif; background-color: #f9f9f9;">
                 </div>
 
-                <div id="captcha-container" style="margin-bottom: 1rem;">
-                <div class="g-recaptcha" data-sitekey="6LdWy2srAAAAAIAOJGwUjLDKKBdij31t0pdkQkVc"></div>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <button type="submit" 
+                        style="color: white; background-color: #003300; padding: 8px 16px; border: none; border-radius: 0; font-family: 'Inter', sans-serif; cursor: pointer;">
+                        Senden
+                    </button>
+                    <div id="spinner" class="spinner"></div>
                 </div>
 
-                <button type="submit" 
-                    style="align-self: flex-start; color: white; background-color: #003300; padding: 8px 16px; border: none; border-radius: 0; font-family: 'Inter', sans-serif; cursor: pointer;">
-                    Senden
-                </button>
-
                 <div id="formResponse" style="margin-top: 1rem; color: green;"></div>
-                <div id="spinner" class="spinner"></div>
             </form>
         </div>
     </div>
@@ -298,5 +298,28 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
     <script src="map.js"></script>
+    <script>
+        document.getElementById('reportForm').addEventListener('submit', function (e) {
+            e.preventDefault(); // Standard-Formularverhalten verhindern
+
+            // Spinner anzeigen
+            document.getElementById('spinner').style.display = 'block';
+
+            grecaptcha.ready(function () {
+                grecaptcha.execute('6Ld4Ym0rAAAAADOulRfKmGerdUSWYfxptXjFDLev', { action: 'submit' }).then(function (token) {
+
+                    // Neuen Input mit Token erzeugen
+                    var input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'g-recaptcha-response';
+                    input.value = token;
+                    document.getElementById('reportForm').appendChild(input);
+
+                    // Formular jetzt absenden
+                    document.getElementById('reportForm').submit();
+                });
+            });
+        });
+    </script>
 </body>
 </html>

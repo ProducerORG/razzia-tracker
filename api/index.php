@@ -75,10 +75,19 @@ function handleReport() {
 
     $message = trim($data['message']);
     $source = trim($data['source']);
+    $captcha = trim($data['captcha']);
 
-    if (empty($message) || empty($source)) {
+    if (empty($message) || empty($source) || empty($captcha)) {
         http_response_code(400);
         echo json_encode(['error' => 'Ungültige Eingabedaten.']);
+        exit();
+    }
+
+    // Captcha prüfen
+    $captchaResult = verifyCaptcha($captcha);
+    if ($captchaResult !== true) {
+        http_response_code(403);
+        echo json_encode(['error' => $captchaResult]);
         exit();
     }
 
@@ -133,4 +142,41 @@ function sendEmail($message, $source) {
         return "E-Mail Fehler: " . $e->getMessage();
     }
 }
+
+function verifyCaptcha($token) {
+    $secret = getenv("RECAPTCHA_SECRET_KEY");
+    if (!$secret) {
+        return "reCAPTCHA-Secret nicht gesetzt.";
+    }
+
+    $verifyUrl = 'https://www.google.com/recaptcha/api/siteverify';
+    $postData = http_build_query([
+        'secret' => $secret,
+        'response' => $token
+    ]);
+
+    $opts = ['http' => [
+        'method'  => 'POST',
+        'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
+        'content' => $postData
+    ]];
+    $context = stream_context_create($opts);
+    $response = file_get_contents($verifyUrl, false, $context);
+
+    if ($response === false) {
+        return "Captcha-Verifizierung fehlgeschlagen (kein Antwort).";
+    }
+
+    $result = json_decode($response, true);
+    if (!isset($result['success']) || !$result['success']) {
+        return "Captcha ungültig.";
+    }
+
+    if (isset($result['score']) && $result['score'] < 0.5) {
+        return "Captcha-Score zu niedrig.";
+    }
+
+    return true;
+}
+
 ?>

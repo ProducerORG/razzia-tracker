@@ -7,7 +7,7 @@ $dotenv->load();
 
 // Konfiguration aus .env
 $KEYWORDS = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
-//$KEYWORDS = ['Drogen']; Testzwecke
+//$KEYWORDS = ['Drogen']; //Testzwecke
 $NEWS_URL = $_ENV['NEWS_URL'] ?? 'https://www.presseportal.de/blaulicht';
 $SUPABASE_URL = $_ENV['SUPABASE_URL'] ?? '';
 $SUPABASE_KEY = $_ENV['SUPABASE_KEY'] ?? '';
@@ -43,7 +43,8 @@ for ($i = 0; $i < $pageCount; $i++) {
     echo "[INFO] Artikel auf Seite ($offset): " . $nodes->length . " (nur Links, keine Filterung)\n";
 
     foreach ($nodes as $node) {
-        $title = trim($node->textContent);
+        $titleRaw = trim($node->textContent);
+        $title = preg_replace('/^POL-[A-ZÄÖÜ]{1,5}:\s*/u', '', $titleRaw);
         $href = $node->getAttribute("href");
         $fullUrl = (strpos($href, 'http') === 0) ? $href : "https://www.presseportal.de$href";
     
@@ -69,7 +70,7 @@ foreach ($articles as $article) {
     $dom2 = new DOMDocument();
     @$dom2->loadHTML($contentHtml);
     $xpath2 = new DOMXPath($dom2);
-    $paragraphs = $xpath2->query("//div[contains(@class,'article-text')]//p");
+    $paragraphs = $xpath2->query("(//div[contains(@class,'article-text')])[1]//p");
 
     // Fallback bei fehlendem Text
     if ($paragraphs->length === 0) {
@@ -86,7 +87,14 @@ foreach ($articles as $article) {
 
     $contentText = "";
     foreach ($paragraphs as $p) {
-        $contentText .= $p->textContent . "\n";
+        $line = trim($p->textContent);
+    
+        // Stoppe bei erkennbaren Footer-Bereichen
+        if (preg_match('/^(weitere meldungen|original-content|druckversion|pdf-version|orte in dieser meldung|themen in dieser meldung|rückfragen bitte an)/i', $line)) {
+            break;
+        }
+    
+        $contentText .= $line . "\n";
     }
 
     $lowerText = mb_strtolower($contentText);
@@ -95,6 +103,7 @@ foreach ($articles as $article) {
         if (mb_strpos($lowerText, mb_strtolower($kw)) !== false) {
             $found = true;
             echo "[DEBUG] Schlüsselwort gefunden: $kw\n";
+            echo "[DEBUG] Textauszug: " . substr($contentText, mb_strpos($lowerText, mb_strtolower($kw)) - 30, 60) . "\n";
             break;
         }
     }
@@ -105,24 +114,30 @@ foreach ($articles as $article) {
     }
 
     $location = extractLocation($contentText);
-    if (!$location) {
-        echo "[INFO] Kein Ort erkannt, Artikel übersprungen.\n";
-        continue;
+    if ($location) {
+        echo "[DEBUG] Erkannter Ort: $location\n";
+        list($lat, $lon) = geocodeLocation($location);
+        if (!$lat || !$lon) {
+            echo "[WARN] Geokodierung fehlgeschlagen für: $location\n";
+            $lat = null;
+            $lon = null;
+        } else {
+            echo "[DEBUG] Geokoordinaten: $lat, $lon\n";
+        }
+    } else {
+        echo "[INFO] Kein Ort erkannt, Felder bleiben leer.\n";
+        $location = null;
+        $lat = null;
+        $lon = null;
     }
-
-    echo "[DEBUG] Erkannter Ort: $location\n";
-
-    list($lat, $lon) = geocodeLocation($location);
-    if (!$lat || !$lon) {
-        echo "[WARN] Geokodierung fehlgeschlagen für: $location\n";
-        continue;
-    }
-
-    echo "[DEBUG] Geokoordinaten: $lat, $lon\n";
 
     $date = gmdate("Y-m-d");
-    $summary = mb_substr($contentText, 0, 300) . "...";
+    $summary = buildSummary($paragraphs);
 
+    echo "[DEBUG] Speichere Artikel mit Keyword: $kw\n";
+    echo "[DEBUG] Titel: {$article['title']}\n";
+    echo "[DEBUG] URL: {$article['url']}\n";
+    echo "[DEBUG] Ausschnitt: " . mb_substr($contentText, mb_strpos($lowerText, mb_strtolower($kw)) - 20, 60) . "\n";
     saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"]);
 
 
@@ -130,11 +145,26 @@ foreach ($articles as $article) {
 }
 
 function extractLocation($text) {
-    $pattern = "/\b(in|bei|nahe) ([A-ZÄÖÜ][a-zäöüßA-ZÄÖÜ-]+)/u";
-    if (preg_match($pattern, $text, $matches)) {
-        return $matches[2];
+    $matches = [];
+    $locations = [];
+
+    // Alle potenziellen Ortsangaben sammeln
+    preg_match_all('/\b(in|bei|nahe)\s+(?!Richtung\b)([A-ZÄÖÜ][a-zäöüßA-ZÄÖÜ-]+)/u', $text, $matches, PREG_SET_ORDER);
+
+    foreach ($matches as $match) {
+        $location = $match[2];
+
+        // Dubletten ignorieren
+        if (in_array($location, $locations)) continue;
+
+        // Orte wie "Polizei", "Polizeipräsidium" etc. ignorieren
+        if (preg_match('/^Polizei|Kriminalpolizei|Staatsanwaltschaft|Feuerwehr/i', $location)) continue;
+
+        $locations[] = $location;
     }
-    return null;
+
+    // Gib den ersten relevanten Ort zurück (z. B. als Hauptort)
+    return $locations[0] ?? null;
 }
 
 function geocodeLocation($location) {
@@ -197,6 +227,27 @@ function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url) {
         echo "[SUCCESS] Gespeichert: $title ($location)\n";
     }
     curl_close($ch);
+}
+
+function buildSummary($paragraphs) {
+    $content = "";
+
+    foreach ($paragraphs as $p) {
+        $line = trim($p->textContent);
+
+        // Unnütze Textfragmente überspringen
+        if (preg_match('/^(mehr themen|[\d]{2}\.\d{2}\.\d{4}|rückfragen bitte an|^kreispolizeibehörde|^original-content|^pdf-version|^druckversion)/i', $line)) {
+            continue;
+        }
+
+        // Erst sinnvoller Textblock wird verwendet
+        if (mb_strlen($line) > 80) {
+            $content = $line;
+            break;
+        }
+    }
+
+    return mb_substr($content, 0, 300) . (mb_strlen($content) > 300 ? "..." : "");
 }
 
 

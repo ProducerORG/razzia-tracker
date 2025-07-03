@@ -8,7 +8,7 @@ function loadEnv($path) {
     foreach ($lines as $line) {
         if (str_starts_with(trim($line), '#')) continue;
         list($name, $value) = explode('=', $line, 2);
-        putenv(trim($name) . '=' . trim($value));
+        putenv(trim($name) . '=' . trim($value, " \t\n\r\0\x0B"));
     }
 }
 

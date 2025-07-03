@@ -13,8 +13,9 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Create .env file
-        run: echo "${{ secrets.ENV_FILE_CONTENT }}" > .env
+      - name: Create .env file with correct line endings
+        run: |
+          echo "${{ secrets.ENV_FILE_CONTENT }}" | sed 's/\r$//' > .env
 
       - name: Upload via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4

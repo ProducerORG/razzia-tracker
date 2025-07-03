@@ -5,11 +5,11 @@
 ```
 ├── README.md
 ├── api
-│   └── index.php
+│   └── main.php
 ├── scraper
 │   └── scraper.php
 ├── docs
-│   ├── index.html
+│   ├── index.php
 │   └── map.js
 ```
 
@@ -35,7 +35,7 @@ SUPABASE_KEY=(...ZU ÜBERMITTELN)
 Den Ordner `api/` via Webserver erreichbar machen. Beispiel:
 
 ```
-https://server.de/api/index.php/api/raids
+https://server.de/api/main.php/api/raids
 ```
 
 Am Besten mit einer `.htaccess` Rewrite-Rule arbeiten:
@@ -45,7 +45,7 @@ Am Besten mit einer `.htaccess` Rewrite-Rule arbeiten:
 ```
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^(.*)$ index.php [QSA,L]
+RewriteRule ^(.*)$ main.php [QSA,L]
 ```
 
 Dann genügt Aufruf z.B. unter:

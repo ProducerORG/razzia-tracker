@@ -148,7 +148,9 @@ function filterAndRender() {
         marker.bindPopup(`
             <b>${entry.title}</b>
             <div style="padding-bottom: 8px;">${entry.summary}</div>
-            <a href="${entry.url}" target="_blank">Mehr erfahren</a>
+            <div style="display: flex; justify-content: flex-end;">
+                <a href="${entry.url}" target="_blank">Mehr erfahren</a>
+            </div>
         `);
         
         const zIndex = 10000 - Math.floor((new Date() - entryDate) / (1000 * 60 * 60 * 24));

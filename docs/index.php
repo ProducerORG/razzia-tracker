@@ -128,6 +128,10 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
             border-radius: 0 !important;
         }
 
+        .leaflet-popup-content .popup-link-container {
+            margin-top: 10px;
+        }
+
         a,
         a:link,
         a:visited,

@@ -147,8 +147,8 @@ function filterAndRender() {
 
         marker.bindPopup(`
             <b>${entry.title}</b><br>
-            ${entry.summary}<br>
-            <div style="margin-top: 5px;">
+            ${entry.summary}
+            <div class="popup-link-container">
                 <a href="${entry.url}" target="_blank">Mehr erfahren</a>
             </div>
         `);

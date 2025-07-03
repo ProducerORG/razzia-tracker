@@ -1,7 +1,15 @@
 <?php
 
-$KEYWORDS = ["razzia", "glücksspiel", "spielhalle", "durchsuchung", "illegal"];
-$NEWS_URL = "https://www.presseportal.de/blaulicht";
+require_once __DIR__ . '/vendor/autoload.php';
+
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
+$dotenv->load();
+
+// Konfiguration aus .env
+$KEYWORDS = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
+$NEWS_URL = $_ENV['NEWS_URL'] ?? 'https://www.presseportal.de/blaulicht';
+$SUPABASE_URL = $_ENV['SUPABASE_URL'] ?? '';
+$SUPABASE_KEY = $_ENV['SUPABASE_KEY'] ?? '';
 
 $html = file_get_contents($NEWS_URL);
 if (!$html) {
@@ -39,7 +47,7 @@ foreach ($articles as $article) {
     $lowerText = mb_strtolower($contentText);
     $found = false;
     foreach ($KEYWORDS as $kw) {
-        if (mb_strpos($lowerText, $kw) !== false) {
+        if (mb_strpos($lowerText, mb_strtolower($kw)) !== false) {
             $found = true;
             break;
         }
@@ -88,8 +96,7 @@ function geocodeLocation($location) {
 }
 
 function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url) {
-    $SUPABASE_URL = getenv("SUPABASE_URL");
-    $SUPABASE_KEY = getenv("SUPABASE_KEY");
+    global $SUPABASE_URL, $SUPABASE_KEY;
 
     $apiUrl = $SUPABASE_URL . "/rest/v1/raids";
     $data = json_encode([

@@ -104,27 +104,20 @@ function handleReport() {
 }
 
 function sendEmail($message, $source) {
-    $SMTP_SERVER = "k75s74.meinserver.io";
-    $SMTP_PORT = 587;
-    $SMTP_USER = "no-reply@glueckswirtschaft.de";
-    $SMTP_PASS = getenv("SMTP_KEY"); // SMTP Passwort aus .env
+    $SMTP_SERVER = getenv("SMTP_HOST") ?: "k75s74.meinserver.io";
+    $SMTP_PORT   = getenv("SMTP_PORT") ?: 587;
+    $SMTP_USER   = getenv("SMTP_USER") ?: "no-reply@glueckswirtschaft.de";
+    $SMTP_PASS   = getenv("SMTP_PASSWORD") ?: getenv("SMTP_KEY"); // Fallback für ältere env
+    $SMTP_TO     = getenv("SMTP_TO") ?: "linus@producer.works";
 
     if (!$SMTP_PASS) {
         return "SMTP-Key fehlt.";
     }
 
-    $to = "linus@producer.works";  // Später auf info@glueckswirtschaft.de ändern
     $subject = "Neue Razzia-Meldung";
     $body = "Neue Meldung eingegangen:\n\nMeldung:\n$message\n\nQuelle:\n$source";
 
-    $headers = [
-        'From' => $SMTP_USER,
-        'To' => $to,
-        'Subject' => $subject
-    ];
-
-    // Mail senden via SMTP (PHPMailer wäre hier eleganter, aber ich halte es wie dein bisheriger Stil)
-    require_once 'vendor/autoload.php'; // Nur falls du Composer verwendest
+    require_once 'vendor/autoload.php';
     $smtp = new Swift_SmtpTransport($SMTP_SERVER, $SMTP_PORT, 'tls');
     $smtp->setUsername($SMTP_USER);
     $smtp->setPassword($SMTP_PASS);
@@ -132,7 +125,7 @@ function sendEmail($message, $source) {
 
     $messageObj = (new Swift_Message($subject))
         ->setFrom([$SMTP_USER => 'Razzia-Tracker'])
-        ->setTo([$to])
+        ->setTo([$SMTP_TO])
         ->setBody($body);
 
     try {

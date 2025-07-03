@@ -1,3 +1,13 @@
+<?php
+require_once __DIR__ . '/vendor/autoload.php';
+
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
+$dotenv->load();
+
+$recaptchaKey = $_ENV['RECAPTCHA_SITE_KEY'] ?? '';
+$apiUrl = $_ENV['API_URL'] ?? '';
+?>
+
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -6,10 +16,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Inter&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <!-- <script src="https://www.google.com/recaptcha/api.js" async defer></script> -->
-    <script src="https://www.google.com/recaptcha/api.js?render=6Ld4Ym0rAAAAADOulRfKmGerdUSWYfxptXjFDLev"></script>
+    <script src="https://www.google.com/recaptcha/api.js?render=<?= htmlspecialchars($recaptchaKey) ?>"></script>
 
-    <style>
+<style>
         :root {
             --gold: #bfa46f;
             --light-gray: #f2f2f2;
@@ -299,24 +308,54 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
     <script src="map.js"></script>
     <script>
-        document.getElementById('reportForm').addEventListener('submit', function (e) {
-            e.preventDefault(); // Standard-Formularverhalten verhindern
+        const apiUrl = "<?= htmlspecialchars($apiUrl) ?>";
+        const recaptchaKey = "<?= htmlspecialchars($recaptchaKey) ?>";
 
-            // Spinner anzeigen
-            document.getElementById('spinner').style.display = 'block';
+        document.getElementById('reportForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const message = document.getElementById('message').value.trim();
+            const source = document.getElementById('source').value.trim();
+            const spinner = document.getElementById('spinner');
+            const responseBox = document.getElementById('formResponse');
+
+            if (!message || !source) {
+                responseBox.style.color = "red";
+                responseBox.textContent = "Bitte alle Felder ausfüllen.";
+                return;
+            }
+
+            spinner.style.display = 'block';
+            responseBox.textContent = "";
 
             grecaptcha.ready(function () {
-                grecaptcha.execute('6Ld4Ym0rAAAAADOulRfKmGerdUSWYfxptXjFDLev', { action: 'submit' }).then(function (token) {
-
-                    // Neuen Input mit Token erzeugen
-                    var input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'g-recaptcha-response';
-                    input.value = token;
-                    document.getElementById('reportForm').appendChild(input);
-
-                    // Formular jetzt absenden
-                    document.getElementById('reportForm').submit();
+                grecaptcha.execute(recaptchaKey, { action: 'submit' }).then(function (token) {
+                    fetch(apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: message,
+                            source: source,
+                            captcha: token
+                        })
+                    })
+                    .then(response => {
+                        spinner.style.display = 'none';
+                        if (!response.ok) throw new Error("Fehler beim Senden");
+                        return response.json();
+                    })
+                    .then(data => {
+                        responseBox.style.color = "green";
+                        responseBox.textContent = "Meldung erfolgreich übermittelt.";
+                        document.getElementById('reportForm').reset();
+                    })
+                    .catch(err => {
+                        responseBox.style.color = "red";
+                        responseBox.textContent = "Fehler beim Senden. Bitte später erneut versuchen.";
+                        console.error("Fehler:", err);
+                    });
                 });
             });
         });

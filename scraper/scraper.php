@@ -7,7 +7,7 @@ $dotenv->load();
 
 // Konfiguration aus .env
 $KEYWORDS = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
-//$KEYWORDS = ['Drogen']; //Testzwecke
+$KEYWORDS = ['Drogen']; //Testzwecke
 $NEWS_URL = $_ENV['NEWS_URL'] ?? 'https://www.presseportal.de/blaulicht';
 $SUPABASE_URL = $_ENV['SUPABASE_URL'] ?? '';
 $SUPABASE_KEY = $_ENV['SUPABASE_KEY'] ?? '';
@@ -18,7 +18,7 @@ echo "[INFO] Schlüsselwörter: " . implode(', ', $KEYWORDS) . "\n";
 $articles = [];
 $seenUrls = [];
 $relevantCount = 0;
-$pageCount = 25;
+$pageCount = 40; //+++
 $step = 30;
 
 for ($i = 0; $i < $pageCount; $i++) {
@@ -97,13 +97,11 @@ foreach ($articles as $article) {
         $contentText .= $line . "\n";
     }
 
-    $lowerText = mb_strtolower($contentText);
     $found = false;
     foreach ($KEYWORDS as $kw) {
-        if (mb_strpos($lowerText, mb_strtolower($kw)) !== false) {
+        if (preg_match('/\b' . preg_quote($kw, '/') . '\b/i', $contentText)) {
             $found = true;
             echo "[DEBUG] Schlüsselwort gefunden: $kw\n";
-            echo "[DEBUG] Textauszug: " . substr($contentText, mb_strpos($lowerText, mb_strtolower($kw)) - 30, 60) . "\n";
             break;
         }
     }
@@ -114,78 +112,76 @@ foreach ($articles as $article) {
     }
 
     $location = extractLocation($contentText);
+    $lat = null;
+    $lon = null;
+    $federal = null;
+
     if ($location) {
         echo "[DEBUG] Erkannter Ort: $location\n";
         list($lat, $lon) = geocodeLocation($location);
-        if (!$lat || !$lon) {
-            echo "[WARN] Geokodierung fehlgeschlagen für: $location\n";
-            $lat = null;
-            $lon = null;
+        if ($lat && $lon) {
+            echo "[DEBUG] Koordinaten: $lat, $lon\n";
+            $federal = getFederalState($lat, $lon);
+            if ($federal) {
+                echo "[DEBUG] Bundesland: $federal\n";
+            }
         } else {
-            echo "[DEBUG] Geokoordinaten: $lat, $lon\n";
+            echo "[WARN] Geokodierung fehlgeschlagen\n";
         }
-    } else {
-        echo "[INFO] Kein Ort erkannt, Felder bleiben leer.\n";
-        $location = null;
-        $lat = null;
-        $lon = null;
     }
 
-    $date = gmdate("Y-m-d");
+    // Datum extrahieren
+    $dateNode = $xpath2->query("//div[contains(@class,'article-text')]//span[contains(@class,'news-headline__date')] | //div[contains(@class,'news-headline')]//span");
+    $dateRaw = $dateNode->length > 0 ? trim($dateNode->item(0)->textContent) : null;
+
+    $date = null;
+    if ($dateRaw && preg_match('/(\d{2})\.(\d{2})\.(\d{4})/', $dateRaw, $matches)) {
+        $date = "{$matches[3]}-{$matches[2]}-{$matches[1]}";
+        echo "[DEBUG] Artikeldatum erkannt: $date\n";
+    } else {
+        $date = gmdate("Y-m-d"); // fallback
+        echo "[WARN] Kein Datum gefunden, fallback auf heute: $date\n";
+    }
+    
     $summary = buildSummary($paragraphs);
 
     echo "[DEBUG] Speichere Artikel mit Keyword: $kw\n";
     echo "[DEBUG] Titel: {$article['title']}\n";
     echo "[DEBUG] URL: {$article['url']}\n";
     echo "[DEBUG] Ausschnitt: " . mb_substr($contentText, mb_strpos($lowerText, mb_strtolower($kw)) - 20, 60) . "\n";
-    saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"]);
-
+    saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"], $federal);
 
     $relevantCount++;
 }
 
 function extractLocation($text) {
-    $matches = [];
-    $locations = [];
+    preg_match_all('/\b(?:in|bei|nahe)\s+(?!Richtung\b)(?!Höhe\b)([A-ZÄÖÜ][a-zäöüßA-ZÄÖÜ-]+)/u', $text, $matches);
+    $found = [];
 
-    // Alle potenziellen Ortsangaben sammeln
-    preg_match_all('/\b(in|bei|nahe)\s+(?!Richtung\b)([A-ZÄÖÜ][a-zäöüßA-ZÄÖÜ-]+)/u', $text, $matches, PREG_SET_ORDER);
-
-    foreach ($matches as $match) {
-        $location = $match[2];
-
-        // Dubletten ignorieren
-        if (in_array($location, $locations)) continue;
-
-        // Orte wie "Polizei", "Polizeipräsidium" etc. ignorieren
-        if (preg_match('/^Polizei|Kriminalpolizei|Staatsanwaltschaft|Feuerwehr/i', $location)) continue;
-
-        $locations[] = $location;
+    foreach ($matches[1] as $loc) {
+        if (preg_match('/Polizei|Kriminalpolizei|Staatsanwaltschaft|Feuerwehr/i', $loc)) continue;
+        if (!in_array($loc, $found)) $found[] = $loc;
     }
 
-    // Gib den ersten relevanten Ort zurück (z. B. als Hauptort)
-    return $locations[0] ?? null;
+    return $found[0] ?? null;
 }
 
 function geocodeLocation($location) {
     $encodedLocation = urlencode($location . ", Deutschland");
     $url = "https://nominatim.openstreetmap.org/search?q=$encodedLocation&format=json&limit=1";
-
-    sleep(1); // API schonen
+    sleep(1);
 
     $opts = ["http" => ["header" => "User-Agent: razzia-map/1.0"]];
-    $context = stream_context_create($opts);
-    $json = file_get_contents($url, false, $context);
+    $ctx = stream_context_create($opts);
+    $json = @file_get_contents($url, false, $ctx);
     if (!$json) return [null, null];
 
     $data = json_decode($json, true);
-    if (count($data) > 0) {
-        return [$data[0]["lat"], $data[0]["lon"]];
-    }
+    if (count($data) > 0) return [$data[0]['lat'], $data[0]['lon']];
     return [null, null];
 }
 
-function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url) {
+function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url, $federal) {
     global $SUPABASE_URL, $SUPABASE_KEY;
 
     $apiUrl = $SUPABASE_URL . "/rest/v1/raids";
@@ -196,7 +192,8 @@ function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url) {
         "location" => $location,
         "lat" => $lat,
         "lon" => $lon,
-        "url" => $url
+        "url" => $url,
+        "federal" => $federal
     ]);
 
     $headers = [
@@ -221,34 +218,35 @@ function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url) {
     } elseif ($httpCode >= 400) {
         echo "[ERROR] Supabase returned HTTP $httpCode\n";
         echo "[ERROR] Response: $response\n";
-        echo "[ERROR] Request payload: $data\n";
+        echo "[ERROR] Payload: $data\n";
     } else {
-        echo "[DEBUG] Supabase Response (HTTP $httpCode): $response\n";
-        echo "[SUCCESS] Gespeichert: $title ($location)\n";
+        echo "[SUCCESS] Gespeichert: $title ($location, $federal)\n";
     }
     curl_close($ch);
 }
 
 function buildSummary($paragraphs) {
-    $content = "";
-
     foreach ($paragraphs as $p) {
         $line = trim($p->textContent);
-
-        // Unnütze Textfragmente überspringen
-        if (preg_match('/^(mehr themen|[\d]{2}\.\d{2}\.\d{4}|rückfragen bitte an|^kreispolizeibehörde|^original-content|^pdf-version|^druckversion)/i', $line)) {
-            continue;
-        }
-
-        // Erst sinnvoller Textblock wird verwendet
+        if (preg_match('/^(mehr themen|[\d]{2}\.\d{2}\.\d{4}|rückfragen bitte an|^kreispolizeibehörde|^original-content|^pdf-version|^druckversion)/i', $line)) continue;
         if (mb_strlen($line) > 80) {
-            $content = $line;
-            break;
+            return mb_substr($line, 0, 300) . (mb_strlen($line) > 300 ? "..." : "");
         }
     }
-
-    return mb_substr($content, 0, 300) . (mb_strlen($content) > 300 ? "..." : "");
+    return "";
 }
 
+function getFederalState($lat, $lon) {
+    $url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$lat&lon=$lon";
+    sleep(1);
+
+    $opts = ["http" => ["header" => "User-Agent: razzia-map/1.0"]];
+    $ctx = stream_context_create($opts);
+    $json = @file_get_contents($url, false, $ctx);
+    if (!$json) return null;
+
+    $data = json_decode($json, true);
+    return $data['address']['state'] ?? null;
+}
 
 echo "[INFO] Gesamt verarbeitete Artikel mit passendem Keyword: $relevantCount\n";

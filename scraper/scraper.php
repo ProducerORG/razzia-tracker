@@ -130,27 +130,20 @@ foreach ($articles as $article) {
         }
     }
 
-    // Datum extrahieren
-    // Datum extrahieren (divs mit Zeitangabe im Header oder Haupttext)
-    $dateRaw = null;
-
-    // Suche nach einem typischen Zeitformat z. B. 03.07.2025 – 12:16
-    $dateCandidates = $xpath2->query("//div[contains(text(), '–') or contains(text(), '–')]");
-    foreach ($dateCandidates as $node) {
-        $text = trim($node->textContent);
-        if (preg_match('/\d{2}\.\d{2}\.\d{4}/', $text)) {
-            $dateRaw = $text;
-            break;
+    // Robuste Extraktion des Veröffentlichungsdatums aus dem <time datetime="">
+    $dateNode = $xpath2->query("//p[contains(@class,'date')]/time");
+    if ($dateNode->length > 0) {
+        $datetimeAttr = $dateNode[0]->getAttribute("datetime"); // Format: 2025-07-02 10:30:01
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $datetimeAttr, $matches)) {
+            $date = "{$matches[1]}-{$matches[2]}-{$matches[3]}";
+            echo "[DEBUG] Veröffentlichungsdatum extrahiert: $date\n";
+        } else {
+            echo "[WARN] Datum nicht interpretierbar, Fallback auf heute\n";
+            $date = gmdate("Y-m-d");
         }
-    }
-
-    $date = null;
-    if ($dateRaw && preg_match('/(\d{2})\.(\d{2})\.(\d{4})/', $dateRaw, $matches)) {
-        $date = "{$matches[3]}-{$matches[2]}-{$matches[1]}";
-        echo "[DEBUG] Artikeldatum erkannt: $date\n";
     } else {
-        $date = gmdate("Y-m-d"); // fallback
-        echo "[WARN] Kein Datum gefunden, fallback auf heute: $date\n";
+        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
+        $date = gmdate("Y-m-d");
     }
     
     $summary = buildSummary($paragraphs);

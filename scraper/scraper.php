@@ -7,7 +7,7 @@ $dotenv->load();
 
 // Konfiguration aus .env
 $KEYWORDS = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
-$KEYWORDS = ['Drogen'];
+//$KEYWORDS = ['Drogen']; Testzwecke
 $NEWS_URL = $_ENV['NEWS_URL'] ?? 'https://www.presseportal.de/blaulicht';
 $SUPABASE_URL = $_ENV['SUPABASE_URL'] ?? '';
 $SUPABASE_KEY = $_ENV['SUPABASE_KEY'] ?? '';
@@ -16,6 +16,8 @@ echo "[INFO] News-URL: $NEWS_URL\n";
 echo "[INFO] Schlüsselwörter: " . implode(', ', $KEYWORDS) . "\n";
 
 $articles = [];
+$seenUrls = [];
+$relevantCount = 0;
 $pageCount = 25;
 $step = 30;
 
@@ -40,7 +42,6 @@ for ($i = 0; $i < $pageCount; $i++) {
 
     echo "[INFO] Artikel auf Seite ($offset): " . $nodes->length . " (nur Links, keine Filterung)\n";
 
-    $seenUrls = [];
     foreach ($nodes as $node) {
         $title = trim($node->textContent);
         $href = $node->getAttribute("href");
@@ -69,6 +70,14 @@ foreach ($articles as $article) {
     @$dom2->loadHTML($contentHtml);
     $xpath2 = new DOMXPath($dom2);
     $paragraphs = $xpath2->query("//div[contains(@class,'article-text')]//p");
+
+    // Fallback bei fehlendem Text
+    if ($paragraphs->length === 0) {
+        $paragraphs = $xpath2->query("//div[contains(@class,'text')]//p");
+        if ($paragraphs->length === 0) {
+            $paragraphs = $xpath2->query("//p");
+        }
+    }
 
     if ($paragraphs->length === 0) {
         echo "[WARN] Kein Artikeltext gefunden für: {$article['title']}\n";
@@ -117,10 +126,12 @@ foreach ($articles as $article) {
     saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"]);
 
     echo "[SUCCESS] Gespeichert: {$article['title']} ($location)\n";
+
+    $relevantCount++;
 }
 
 function extractLocation($text) {
-    $pattern = "/\b(in|bei|nahe|im|am) ([A-ZÄÖÜ][a-zäöüßA-ZÄÖÜ-]+)/u";
+    $pattern = "/\b(in|bei|nahe) ([A-ZÄÖÜ][a-zäöüßA-ZÄÖÜ-]+)/u";
     if (preg_match($pattern, $text, $matches)) {
         return $matches[2];
     }

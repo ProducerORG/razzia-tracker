@@ -16,6 +16,8 @@ loadEnv(__DIR__ . '/.env');
 
 $recaptchaKey = getenv('RECAPTCHA_SITE_KEY') ?: '';
 $apiUrl = getenv('API_URL') ?: '';
+
+echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true) . " -->";
 ?>
 
 <!DOCTYPE html>
@@ -26,7 +28,11 @@ $apiUrl = getenv('API_URL') ?: '';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href="https://fonts.googleapis.com/css2?family=Inter&family=Playfair+Display:wght@600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
-    <script src="https://www.google.com/recaptcha/api.js?render=<?= htmlspecialchars($recaptchaKey) ?>"></script>
+    <?php if (!empty($recaptchaKey)) : ?>
+    <script src="https://www.google.com/recaptcha/api.js?render=<?= htmlspecialchars($recaptchaKey, ENT_QUOTES, 'UTF-8') ?>"></script>
+    <?php else: ?>
+        <!-- WARNUNG: Kein RECAPTCHA_SITE_KEY gesetzt -->
+    <?php endif; ?>
 
 <style>
         :root {

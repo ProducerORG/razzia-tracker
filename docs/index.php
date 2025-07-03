@@ -192,7 +192,7 @@ $apiUrl = $_ENV['API_URL'] ?? '';
 <body>
     <div class="sidebar">
         <img src="https://glueckswirtschaft.de/media/site/813e60f13a-1743167695/glueckswirtschaft-logo.svg" alt="Glückswirtschaft Logo" style="width: 100%; max-width: 160px; margin-bottom: 1rem;">
-        <h3>Was ist der Razzia-Tracker? Test erfolgreich!!!!</h3>
+        <h3>Was ist der Razzia-Tracker? Test erfolgreich!</h3>
         <p>Der Razzia-Tracker der <i>GlücksWirtschaft</i> dokumentiert polizeiliche Maßnahmen gegen illegales Glücksspiel in Deutschland. Ob Spielhallen, Hinterzimmer oder digitale Plattformen – hier finden Sie verlässliche und aktuelle Informationen über Durchsuchungen, Beschlagnahmungen und Ermittlungen. Unsere Redaktion sammelt und verifiziert fortlaufend Berichte aus offiziellen Quellen, Medien und Polizeimeldungen.</p>
         <h3>Warum das wichtig ist:</h3>
         <p>Illegales Glücksspiel entzieht sich der Kontrolle, gefährdet Spieler und untergräbt den legalen Markt. Mit dem Razzia-Tracker schaffen wir erstmals überregional Transparenz – für Behörden, Politik, Branche und Öffentlichkeit.</p>

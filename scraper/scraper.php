@@ -11,9 +11,12 @@ $NEWS_URL = $_ENV['NEWS_URL'] ?? 'https://www.presseportal.de/blaulicht';
 $SUPABASE_URL = $_ENV['SUPABASE_URL'] ?? '';
 $SUPABASE_KEY = $_ENV['SUPABASE_KEY'] ?? '';
 
+echo "[INFO] News-URL: $NEWS_URL\n";
+echo "[INFO] Schlüsselwörter: " . implode(', ', $KEYWORDS) . "\n";
+
 $html = file_get_contents($NEWS_URL);
 if (!$html) {
-    exit("Fehler beim Laden der News-Seite\n");
+    exit("[ERROR] Fehler beim Laden der News-Seite\n");
 }
 
 libxml_use_internal_errors(true);
@@ -22,22 +25,36 @@ $dom->loadHTML($html);
 $xpath = new DOMXPath($dom);
 $nodes = $xpath->query("//a[contains(@class,'teaser-title')]");
 
+echo "[INFO] Gefundene Artikel: " . $nodes->length . "\n";
+
 $articles = [];
 foreach ($nodes as $node) {
     $title = trim($node->textContent);
     $href = $node->getAttribute("href");
-    $articles[] = ["title" => $title, "url" => "https://www.presseportal.de$href"];
+    $fullUrl = "https://www.presseportal.de$href";
+    echo "[DEBUG] Artikel erfasst: $title\n";
+    $articles[] = ["title" => $title, "url" => $fullUrl];
     if (count($articles) >= 10) break;
 }
 
 foreach ($articles as $article) {
+    echo "[INFO] Verarbeite Artikel: {$article['title']}\n";
+
     $contentHtml = file_get_contents($article["url"]);
-    if (!$contentHtml) continue;
+    if (!$contentHtml) {
+        echo "[WARN] Artikel konnte nicht geladen werden: {$article['url']}\n";
+        continue;
+    }
 
     $dom2 = new DOMDocument();
-    $dom2->loadHTML($contentHtml);
+    @$dom2->loadHTML($contentHtml); // Unterdrückt Warnungen
     $xpath2 = new DOMXPath($dom2);
     $paragraphs = $xpath2->query("//div[contains(@class,'article-text')]//p");
+
+    if ($paragraphs->length === 0) {
+        echo "[WARN] Kein Artikeltext gefunden für: {$article['title']}\n";
+        continue;
+    }
 
     $contentText = "";
     foreach ($paragraphs as $p) {
@@ -49,27 +66,41 @@ foreach ($articles as $article) {
     foreach ($KEYWORDS as $kw) {
         if (mb_strpos($lowerText, mb_strtolower($kw)) !== false) {
             $found = true;
+            echo "[DEBUG] Schlüsselwort gefunden: $kw\n";
             break;
         }
     }
-    if (!$found) continue;
+
+    if (!$found) {
+        echo "[INFO] Kein relevantes Schlüsselwort gefunden, Artikel übersprungen.\n";
+        continue;
+    }
 
     $location = extractLocation($contentText);
-    if (!$location) continue;
+    if (!$location) {
+        echo "[INFO] Kein Ort erkannt, Artikel übersprungen.\n";
+        continue;
+    }
+
+    echo "[DEBUG] Erkannter Ort: $location\n";
 
     list($lat, $lon) = geocodeLocation($location);
-    if (!$lat || !$lon) continue;
+    if (!$lat || !$lon) {
+        echo "[WARN] Geokodierung fehlgeschlagen für: $location\n";
+        continue;
+    }
+
+    echo "[DEBUG] Geokoordinaten: $lat, $lon\n";
 
     $date = gmdate("Y-m-d");
     $summary = mb_substr($contentText, 0, 300) . "...";
-    
+
     saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"]);
-    
-    echo "Gespeichert: {$article['title']} ($location)\n";
+
+    echo "[SUCCESS] Gespeichert: {$article['title']} ($location)\n";
 }
 
 function extractLocation($text) {
-    // Einfache regelbasierte Orts-Extraktion
     $pattern = "/\b(in|bei|nahe|im|am) ([A-ZÄÖÜ][a-zäöüßA-ZÄÖÜ-]+)/u";
     if (preg_match($pattern, $text, $matches)) {
         return $matches[2];
@@ -80,7 +111,7 @@ function extractLocation($text) {
 function geocodeLocation($location) {
     $encodedLocation = urlencode($location . ", Deutschland");
     $url = "https://nominatim.openstreetmap.org/search?q=$encodedLocation&format=json&limit=1";
-    
+
     sleep(1); // API schonen
 
     $opts = ["http" => ["header" => "User-Agent: razzia-map/1.0"]];
@@ -121,10 +152,12 @@ function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url) {
     curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
     curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
     curl_setopt($ch, CURLOPT_POST, 1);
-    
+
     $response = curl_exec($ch);
     if (curl_errno($ch)) {
         error_log('Supabase insert error: ' . curl_error($ch));
+    } else {
+        echo "[DEBUG] Supabase Response: $response\n";
     }
     curl_close($ch);
 }

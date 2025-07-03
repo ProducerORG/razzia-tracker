@@ -58,7 +58,7 @@ for ($i = 0; $i < $pageCount; $i++) {
 
 // Artikel verarbeiten
 foreach ($articles as $article) {
-    echo "[INFO] Verarbeite Artikel: {$article['title']}\n";
+    //echo "[INFO] Verarbeite Artikel: {$article['title']}\n";
 
     $contentHtml = file_get_contents($article["url"]);
     if (!$contentHtml) {
@@ -125,7 +125,6 @@ foreach ($articles as $article) {
 
     saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"]);
 
-    echo "[SUCCESS] Gespeichert: {$article['title']} ($location)\n";
 
     $relevantCount++;
 }
@@ -173,7 +172,8 @@ function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url) {
     $headers = [
         "apikey: $SUPABASE_KEY",
         "Authorization: Bearer $SUPABASE_KEY",
-        "Content-Type: application/json"
+        "Content-Type: application/json",
+        "Prefer: return=representation"
     ];
 
     $ch = curl_init();
@@ -184,10 +184,17 @@ function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url) {
     curl_setopt($ch, CURLOPT_POST, 1);
 
     $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
     if (curl_errno($ch)) {
-        error_log('Supabase insert error: ' . curl_error($ch));
+        error_log('[ERROR] Supabase CURL error: ' . curl_error($ch));
+    } elseif ($httpCode >= 400) {
+        echo "[ERROR] Supabase returned HTTP $httpCode\n";
+        echo "[ERROR] Response: $response\n";
+        echo "[ERROR] Request payload: $data\n";
     } else {
-        echo "[DEBUG] Supabase Response: $response\n";
+        echo "[DEBUG] Supabase Response (HTTP $httpCode): $response\n";
+        echo "[SUCCESS] Gespeichert: $title ($location)\n";
     }
     curl_close($ch);
 }

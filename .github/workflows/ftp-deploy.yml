@@ -17,14 +17,14 @@ jobs:
         run: echo "${{ secrets.ENV_FILE_CONTENT }}" > .env
 
       - name: Upload via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
           server: ${{ secrets.FTP_HOST }}
           port: ${{ secrets.FTP_PORT }}
           username: ${{ secrets.FTP_USER }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./
-          server-dir: /          # ggf. anpassen, z.B. /html/
+          server-dir: /
           exclude: |
             **/.git*
             **/.github*

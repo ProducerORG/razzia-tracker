@@ -7,7 +7,7 @@ $dotenv->load();
 
 // Konfiguration aus .env
 $KEYWORDS = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
-$KEYWORDS = ['Drogen']; //Testzwecke
+//$KEYWORDS = ['Drogen']; //Testzwecke
 $NEWS_URL = $_ENV['NEWS_URL'] ?? 'https://www.presseportal.de/blaulicht';
 $SUPABASE_URL = $_ENV['SUPABASE_URL'] ?? '';
 $SUPABASE_KEY = $_ENV['SUPABASE_KEY'] ?? '';
@@ -18,7 +18,7 @@ echo "[INFO] Schlüsselwörter: " . implode(', ', $KEYWORDS) . "\n";
 $articles = [];
 $seenUrls = [];
 $relevantCount = 0;
-$pageCount = 40; //+++
+$pageCount = 60; //+++
 $step = 30;
 
 for ($i = 0; $i < $pageCount; $i++) {
@@ -192,7 +192,16 @@ foreach ($articles as $article) {
     echo "[DEBUG] Speichere Artikel mit Keyword: $kw\n";
     echo "[DEBUG] Titel: {$article['title']}\n";
     echo "[DEBUG] URL: {$article['url']}\n";
-    echo "[DEBUG] Ausschnitt: " . mb_substr($contentText, mb_strpos(mb_strtolower($kw)) - 20, 60) . "\n";
+    $lowerText = mb_strtolower($contentText);
+    $pos = mb_strpos($lowerText, mb_strtolower($kw));
+
+    if ($pos !== false) {
+        $start = max(0, $pos - 20);
+        $snippet = mb_substr($contentText, $start, 60);
+        echo "[DEBUG] Kontext des Schlüsselwortes: $snippet\n";
+    } else {
+        echo "[DEBUG] Kein Kontext des Schlüsselwortes\n";
+    }
     saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"], $federal, $type);
 
     $relevantCount++;

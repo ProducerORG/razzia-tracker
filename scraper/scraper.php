@@ -61,6 +61,11 @@ for ($i = 0; $i < $pageCount; $i++) {
 foreach ($articles as $article) {
     //echo "[INFO] Verarbeite Artikel: {$article['title']}\n";
 
+    if (urlExistsInDatabase($article["url"])) {
+        echo "[INFO] Artikel bereits in Datenbank, übersprungen: {$article['url']}\n";
+        continue;
+    }
+
     $contentHtml = file_get_contents($article["url"]);
     if (!$contentHtml) {
         echo "[WARN] Artikel konnte nicht geladen werden: {$article['url']}\n";
@@ -331,6 +336,36 @@ Text:\n" . mb_substr($text, 0, 2000);
 
     $result = json_decode($content, true);
     return $result;
+}
+
+
+function urlExistsInDatabase($url) {
+    global $SUPABASE_URL, $SUPABASE_KEY;
+
+    $queryUrl = $SUPABASE_URL . "/rest/v1/raids?url=eq." . urlencode($url) . "&select=url&limit=1";
+
+    $headers = [
+        "apikey: $SUPABASE_KEY",
+        "Authorization: Bearer $SUPABASE_KEY",
+        "Accept: application/json"
+    ];
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $queryUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode !== 200 || !$response) {
+        echo "[WARN] Fehler bei DB-URL-Prüfung für $url\n";
+        return false; // Im Zweifel nicht überspringen
+    }
+
+    $data = json_decode($response, true);
+    return !empty($data); // true, wenn URL schon existiert
 }
 
 echo "[INFO] Gesamt verarbeitete Artikel mit passendem Keyword: $relevantCount\n";

@@ -111,22 +111,58 @@ foreach ($articles as $article) {
         continue;
     }
 
-    $location = extractLocation($contentText);
-    $lat = null;
-    $lon = null;
-    $federal = null;
 
-    if ($location) {
-        echo "[DEBUG] Erkannter Ort: $location\n";
-        list($lat, $lon) = geocodeLocation($location);
-        if ($lat && $lon) {
-            echo "[DEBUG] Koordinaten: $lat, $lon\n";
-            $federal = getFederalState($lat, $lon);
-            if ($federal) {
-                echo "[DEBUG] Bundesland: $federal\n";
+    // GPT-Metadaten extrahieren
+    $gptResult = extractMetadataWithGPT($contentText);
+
+    $type = "Sonstige"; // Default
+    $gptOrt = null;
+    $gptLat = null;
+    $gptLon = null;
+
+    // GPT-Antwort auswerten
+    if ($gptResult && is_array($gptResult)) {
+        $gptOrt = $gptResult['ort'] ?? null;
+        $type = $gptResult['typ'] ?? "Sonstige";
+        $gptLat = $gptResult['koord']['lat'] ?? null;
+        $gptLon = $gptResult['koord']['lon'] ?? null;
+
+        if ($gptOrt) {
+            echo "[GPT] Ort erkannt: $gptOrt\n";
+        }
+        echo "[GPT] Typ erkannt: $type\n";
+        if ($gptLat && $gptLon) {
+            echo "[GPT] Koordinaten erkannt: $gptLat, $gptLon\n";
+        }
+    }
+
+    // Fallback-Logik bei fehlendem Ort
+    $location = $gptOrt ?: extractLocation($contentText);
+    if (!$location) {
+        echo "[WARN] Kein Ort durch GPT oder Fallback-Logik gefunden\n";
+    }
+
+    $lat = $gptLat;
+    $lon = $gptLon;
+
+    // Wenn GPT keine Koordinaten liefert → Fallback auf Geocoding
+    if (!$lat || !$lon) {
+        if ($location) {
+            list($lat, $lon) = geocodeLocation($location);
+            if ($lat && $lon) {
+                echo "[INFO] Fallback-Koordinaten ermittelt: $lat, $lon\n";
+            } else {
+                echo "[WARN] Fallback-Geocoding fehlgeschlagen\n";
             }
-        } else {
-            echo "[WARN] Geokodierung fehlgeschlagen\n";
+        }
+    }
+
+    // Bundesland ermitteln (sofern Koordinaten vorhanden)
+    $federal = null;
+    if ($lat && $lon) {
+        $federal = getFederalState($lat, $lon);
+        if ($federal) {
+            echo "[INFO] Bundesland: $federal\n";
         }
     }
 
@@ -151,8 +187,8 @@ foreach ($articles as $article) {
     echo "[DEBUG] Speichere Artikel mit Keyword: $kw\n";
     echo "[DEBUG] Titel: {$article['title']}\n";
     echo "[DEBUG] URL: {$article['url']}\n";
-    echo "[DEBUG] Ausschnitt: " . mb_substr($contentText, mb_strpos($lowerText, mb_strtolower($kw)) - 20, 60) . "\n";
-    saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"], $federal);
+    echo "[DEBUG] Ausschnitt: " . mb_substr($contentText, mb_strpos(mb_strtolower($kw)) - 20, 60) . "\n";
+    saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"], $federal, $type);
 
     $relevantCount++;
 }
@@ -184,7 +220,7 @@ function geocodeLocation($location) {
     return [null, null];
 }
 
-function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url, $federal) {
+function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url, $federal, $type) {
     global $SUPABASE_URL, $SUPABASE_KEY;
 
     $apiUrl = $SUPABASE_URL . "/rest/v1/raids";
@@ -196,7 +232,8 @@ function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url, $f
         "lat" => $lat,
         "lon" => $lon,
         "url" => $url,
-        "federal" => $federal
+        "federal" => $federal,
+        "type" => $type 
     ]);
 
     $headers = [
@@ -250,6 +287,50 @@ function getFederalState($lat, $lon) {
 
     $data = json_decode($json, true);
     return $data['address']['state'] ?? null;
+}
+
+function extractMetadataWithGPT($text) {
+    $apiKey = $_ENV['OPENAI_API_KEY'];
+    $url = 'https://api.openai.com/v1/chat/completions';
+
+    $prompt = "Analysiere den folgenden Nachrichtentext. Gib das Ergebnis als JSON zurück mit den Feldern:
+- 'ort': Der Ort, wo der Vorfall stattgefunden hat. Gib ausschließlich den Ortsnamen zurück, ohne Zusätze wie 'in', 'bei' oder 'nahe'.
+- 'typ': Einer der Werte: 'Automatenspiel', 'Wetten', 'Online-Spiele'. Je nach dem, was im Text am ehesten zutrifft. Trifft defintiv nichts davon zu, gib den Wert 'Sonstige' zurück.
+- 'koord': Falls ermittelbar, ein Objekt mit 'lat' und 'lon' (sonst null). Die Koordinaten müssen unbedingt dem deutschen Ort entsprechen, wo der Vorfall stattgefunden hat.
+
+Text:\n" . mb_substr($text, 0, 2000);
+
+    $data = [
+        "model" => "gpt-4",
+        "messages" => [
+            ["role" => "user", "content" => $prompt]
+        ],
+        "temperature" => 0.1
+    ];
+
+    $headers = [
+        "Authorization: Bearer $apiKey",
+        "Content-Type: application/json"
+    ];
+
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+    $response = curl_exec($ch);
+    curl_close($ch);
+
+    if (!$response) return null;
+
+    $json = json_decode($response, true);
+    $content = $json['choices'][0]['message']['content'] ?? null;
+
+    if (!$content) return null;
+
+    $result = json_decode($content, true);
+    return $result;
 }
 
 echo "[INFO] Gesamt verarbeitete Artikel mit passendem Keyword: $relevantCount\n";

@@ -74,7 +74,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
         }
 
         .map-container {
-            flex: 3 1 400px;
+            flex: 4 1 400px;
             border-left: 1px solid #ddd;
             border-right: 1px solid #ddd;
             padding: 0;

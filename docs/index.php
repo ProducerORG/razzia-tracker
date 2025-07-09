@@ -193,6 +193,30 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
+
+        #mapLoadingOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 9999;
+            background-color: rgba(255, 255, 255, 0.75);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+        }
+
+        .loader-circle {
+            width: 80px;
+            height: 80px;
+            border: 10px solid #ccc;
+            border-top: 10px solid #003300;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
@@ -247,6 +271,9 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
     </div>
     <div class="map-container">
         <div id="map"></div>
+    </div>
+    <div id="mapLoadingOverlay">
+        <div class="loader-circle"></div>
     </div>
     <div class="info-panel">
         <div class="top-right-info">Beobachtung seit 01.07.2025</div>

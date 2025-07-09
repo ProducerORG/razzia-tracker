@@ -1,5 +1,6 @@
 const initialMinZoom = window.innerWidth < 768 ? 3 : 6;
 const initialZoom = window.innerWidth < 768 ? 4 : 6;
+const loadingOverlay = document.getElementById("mapLoadingOverlay");
 
 const map = L.map('map', {
     minZoom: initialMinZoom,
@@ -106,84 +107,91 @@ function getColoredIcon(color) {
 
 function filterAndRender() {
     if (!geoLayer) return;
-    const startDateInput = document.getElementById("startDate").value;
-    const endDateInput = document.getElementById("endDate").value;
-    const startDate = startDateInput ? new Date(startDateInput) : null;
-    const endDate = endDateInput ? new Date(endDateInput) : new Date();
-    const selectedFederals = getSelectedFederals();
 
-    clearMarkers();
+    loadingOverlay.style.display = "flex"; // Ladeoverlay einblenden
 
-    let count = 0;
-    let filteredDates = [];
+    setTimeout(() => {
+        const startDateInput = document.getElementById("startDate").value;
+        const endDateInput = document.getElementById("endDate").value;
+        const startDate = startDateInput ? new Date(startDateInput) : null;
+        const endDate = endDateInput ? new Date(endDateInput) : new Date();
+        const selectedFederals = getSelectedFederals();
 
-    const positionOffsetMap = new Map();
+        clearMarkers();
 
-    allData.forEach(entry => {
-        if (entry.federal && !selectedFederals.includes(entry.federal)) return;
-        const lat = parseFloat(entry.lat);
-        const lon = parseFloat(entry.lon);
-        if (isNaN(lat) || isNaN(lon)) return;
+        let count = 0;
+        let filteredDates = [];
 
-        const entryDate = new Date(entry.date);
-        if (startDate && entryDate < startDate) return;
-        if (endDate && entryDate > endDate) return;
+        const positionOffsetMap = new Map();
 
-        filteredDates.push(entryDate);
+        allData.forEach(entry => {
+            if (entry.federal && !selectedFederals.includes(entry.federal)) return;
+            const lat = parseFloat(entry.lat);
+            const lon = parseFloat(entry.lon);
+            if (isNaN(lat) || isNaN(lon)) return;
 
-        const key = `${lat},${lon}`;
-        const offsetIndex = positionOffsetMap.get(key) || 0;
-        positionOffsetMap.set(key, offsetIndex + 1);
+            const entryDate = new Date(entry.date);
+            if (startDate && entryDate < startDate) return;
+            if (endDate && entryDate > endDate) return;
 
-        const angle = (offsetIndex * 50) * (Math.PI / 180);
-        const ring = Math.floor(offsetIndex / 8);
-        const radius = 0.1 + 0.05 * ring;
-        const latOffset = lat + radius * Math.cos(angle);
-        const lonOffset = lon + radius * Math.sin(angle);
+            filteredDates.push(entryDate);
 
-        const marker = L.marker([latOffset, lonOffset], {
-            icon: getColoredIcon(getColor(entry.type))
+            const key = `${lat},${lon}`;
+            const offsetIndex = positionOffsetMap.get(key) || 0;
+            positionOffsetMap.set(key, offsetIndex + 1);
+
+            const angle = (offsetIndex * 50) * (Math.PI / 180);
+            const ring = Math.floor(offsetIndex / 8);
+            const radius = 0.1 + 0.05 * ring;
+            const latOffset = lat + radius * Math.cos(angle);
+            const lonOffset = lon + radius * Math.sin(angle);
+
+            const marker = L.marker([latOffset, lonOffset], {
+                icon: getColoredIcon(getColor(entry.type))
+            });
+
+            marker.bindPopup(`
+                <b>${entry.title}</b>
+                <div style="padding-bottom: 8px;">${entry.summary}</div>
+                <div style="display: flex; justify-content: flex-end;">
+                    <a href="${entry.url}" target="_blank">Mehr erfahren</a>
+                </div>
+            `);
+            
+            const zIndex = 10000 - Math.floor((new Date() - entryDate) / (1000 * 60 * 60 * 24));
+            marker.setZIndexOffset(zIndex);
+
+            marker.addTo(map);
+            markers.push(marker);
+            count++;
         });
 
-        marker.bindPopup(`
-            <b>${entry.title}</b>
-            <div style="padding-bottom: 8px;">${entry.summary}</div>
-            <div style="display: flex; justify-content: flex-end;">
-                <a href="${entry.url}" target="_blank">Mehr erfahren</a>
-            </div>
-        `);
-        
-        const zIndex = 10000 - Math.floor((new Date() - entryDate) / (1000 * 60 * 60 * 24));
-        marker.setZIndexOffset(zIndex);
-
-        marker.addTo(map);
-        markers.push(marker);
-        count++;
-    });
-
-    let infoText = "";
-    if (filteredDates.length > 0) {
-        const minDate = new Date(Math.min(...filteredDates));
-        const maxDate = new Date(Math.max(...filteredDates));
-        const days = Math.floor((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1;
-        const formattedMinDate = minDate.toLocaleDateString('de-DE');
-        infoText = `${count} in ${days} Tagen`; //\nStartdatum: ${formattedMinDate}
-    } else {
-        infoText = `${count} Einträge`;
-    }
-
-    const entryDisplay = document.getElementById("entryCount");
-    entryDisplay.innerText = infoText;
-    entryDisplay.style.fontSize = "1.2rem";
-
-    geoLayer.eachLayer(layer => {
-        const name = layer.feature.properties.NAME_1;
-        if (selectedFederals.includes(name)) {
-            layer.setStyle({ opacity: 0.8, fillOpacity: 0.3 });
+        let infoText = "";
+        if (filteredDates.length > 0) {
+            const minDate = new Date(Math.min(...filteredDates));
+            const maxDate = new Date(Math.max(...filteredDates));
+            const days = Math.floor((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1;
+            const formattedMinDate = minDate.toLocaleDateString('de-DE');
+            infoText = `${count} in ${days} Tagen`;
         } else {
-            layer.setStyle({ opacity: 0.2, fillOpacity: 0.1 });
+            infoText = `${count} Einträge`;
         }
-    });
+
+        const entryDisplay = document.getElementById("entryCount");
+        entryDisplay.innerText = infoText;
+        entryDisplay.style.fontSize = "1.2rem";
+
+        geoLayer.eachLayer(layer => {
+            const name = layer.feature.properties.NAME_1;
+            if (selectedFederals.includes(name)) {
+                layer.setStyle({ opacity: 0.8, fillOpacity: 0.3 });
+            } else {
+                layer.setStyle({ opacity: 0.2, fillOpacity: 0.1 });
+            }
+        });
+
+        loadingOverlay.style.display = "none"; // Ladeoverlay ausblenden
+    }, 50); // kleine Verzögerung, damit Overlay sichtbar wird
 }
 
 document.getElementById("startDate").addEventListener("change", filterAndRender);

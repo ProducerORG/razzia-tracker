@@ -71,7 +71,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
-        }
+        } 
 
         .map-container {
             flex: 4 1 400px;

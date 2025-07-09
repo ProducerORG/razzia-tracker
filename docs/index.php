@@ -380,5 +380,22 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
             });
         });
     </script>
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            const startInput = document.getElementById('startDate');
+            const endInput = document.getElementById('endDate');
+
+            const today = new Date();
+            const formatDate = (date) => {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            };
+
+            startInput.value = '2025-07-01';
+            endInput.value = formatDate(today);
+        });
+    </script>
 </body>
 </html>

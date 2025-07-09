@@ -79,6 +79,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
             border-right: 1px solid #ddd;
             padding: 0;
             height: 100vh;
+            position: relative;
         }
 
         #map {
@@ -272,9 +273,6 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
     <div class="map-container">
         <div id="map"></div>
     </div>
-    <div id="mapLoadingOverlay">
-        <div class="loader-circle"></div>
-    </div>
     <div class="info-panel">
         <div class="top-right-info">Beobachtung seit 01.07.2025</div>
 
@@ -348,6 +346,9 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
             <span>&nbsp;&nbsp;Sonstige</span>
             </div> 
         </p>
+    </div>
+    <div id="mapLoadingOverlay">
+        <div class="loader-circle"></div>
     </div>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>

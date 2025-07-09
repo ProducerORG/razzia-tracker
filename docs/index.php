@@ -201,19 +201,19 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: 9999;
-            background-color: rgba(255, 255, 255, 0.75);
-            display: flex;
+            background-color: rgba(255,255,255,0.7);
+            display: none;
             justify-content: center;
             align-items: center;
+            z-index: 500; /* ausreichend über Leaflet, aber unter UI-Elementen */
             pointer-events: none;
         }
 
         .loader-circle {
-            width: 80px;
-            height: 80px;
-            border: 10px solid #ccc;
-            border-top: 10px solid #003300;
+            width: 60px;
+            height: 60px;
+            border: 8px solid #ccc;
+            border-top: 8px solid #003300;
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
@@ -221,6 +221,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
 
         @media (max-width: 768px) {
             body {
@@ -272,9 +273,9 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
     </div>
     <div class="map-container">
         <div id="map"></div>
-    </div>
-    <div id="mapLoadingOverlay">
-        <div class="loader-circle"></div>
+        <div id="mapLoadingOverlay">
+            <div class="loader-circle"></div>
+        </div>
     </div>
     <div class="info-panel">
         <div class="top-right-info">Beobachtung seit 01.07.2025</div>

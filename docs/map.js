@@ -195,11 +195,17 @@ function filterAndRender() {
 document.getElementById("startDate").addEventListener("change", filterAndRender);
 document.getElementById("endDate").addEventListener("change", filterAndRender);
 
+loadingOverlay.style.display = "flex"; // << NEU
+
 fetch('https://razzia-tracker.onrender.com/api/raids')
     .then(res => res.json())
     .then(data => {
         allData = data;
         filterAndRender();
+    })
+    .catch(err => {
+        console.error("Fehler beim Laden der Daten:", err);
+        loadingOverlay.style.display = "none"; // falls Fehler auftritt
     });
 
 /* MELDEFORMULAR */

@@ -205,7 +205,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
             display: none;
             justify-content: center;
             align-items: center;
-            z-index: 500; /* ausreichend über Leaflet, aber unter UI-Elementen */
+            z-index: 1000;
             pointer-events: none;
         }
 

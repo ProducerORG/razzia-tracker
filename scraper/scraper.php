@@ -7,6 +7,7 @@ $dotenv->load();
 
 // Konfiguration aus .env
 $KEYWORDS = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
+//KEYWORDS=glücksspiel,spielhalle,spielautomat,casino,lotto,lotterie,online-casino,automatenspiele
 //$KEYWORDS = ['Drogen']; //Testzwecke
 $NEWS_URL = $_ENV['NEWS_URL'] ?? 'https://www.presseportal.de/blaulicht';
 $SUPABASE_URL = $_ENV['SUPABASE_URL'] ?? '';
@@ -119,6 +120,11 @@ foreach ($articles as $article) {
 
     // GPT-Metadaten extrahieren
     $gptResult = extractMetadataWithGPT($contentText);
+
+    if (!$gptResult || !is_array($gptResult) || ($gptResult['illegal'] ?? false) !== true) {
+        echo "[INFO] Kein Fall von illegalem Glücksspiel – Artikel verworfen\n";
+        continue;
+    }
 
     $type = "Sonstige"; // Default
     $gptOrt = null;
@@ -311,6 +317,7 @@ function extractMetadataWithGPT($text) {
 - 'ort': Der Ort, wo der Vorfall stattgefunden hat. Gib ausschließlich den Ortsnamen zurück, ohne Zusätze wie 'in', 'bei' oder 'nahe'.
 - 'typ': Einer der Werte: 'Automatenspiel', 'Wetten', 'Online-Spiele'. Je nach dem, was im Text am ehesten zutrifft. Trifft defintiv nichts davon zu, gib den Wert 'Sonstige' zurück.
 - 'koord': Falls ermittelbar, ein Objekt mit 'lat' und 'lon' (sonst null). Die Koordinaten müssen unbedingt dem deutschen Ort entsprechen, wo der Vorfall stattgefunden hat.
+- 'illegal': true oder false. Gib 'true' zurück, **wenn es sich eindeutig um illegales Glücksspiel handelt**. Gib 'false' zurück, **wenn es um andere Vorfälle wie Diebstahl, Einbruch, Überfall, Geldwäsche, oder Straftaten im Umfeld legaler Glücksspiele geht.**
 
 Text:\n" . mb_substr($text, 0, 2000);
 

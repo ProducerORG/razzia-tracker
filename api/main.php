@@ -1,5 +1,7 @@
 <?php
 
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
@@ -21,15 +23,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-$path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$route = $_GET['route'] ?? '';
 
-if ($path === '/api/raids') {
-    handleGetRaids();
-} elseif ($path === '/api/report') {
-    handleReport();
-} else {
-    http_response_code(404);
-    echo json_encode(['error' => 'Not Found']);
+switch ($route) {
+    case 'raids':
+        handleGetRaids();
+        break;
+    case 'report':
+        handleReport();
+        break;
+    default:
+        http_response_code(404);
+        echo json_encode(['error' => 'Route nicht gefunden']);
+        break;
 }
 
 // Supabase-Daten abrufen

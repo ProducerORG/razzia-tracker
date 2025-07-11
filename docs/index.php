@@ -2,13 +2,15 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-function loadEnv($path) {
-    if (!file_exists($path)) return;
-    $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        if (str_starts_with(trim($line), '#')) continue;
-        list($name, $value) = explode('=', $line, 2);
-        putenv(trim($name) . '=' . trim($value, " \t\n\r\0\x0B"));
+if (!function_exists('loadEnv')) {
+    function loadEnv($path) {
+        if (!file_exists($path)) return;
+        $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            if (str_starts_with(trim($line), '#')) continue;
+            list($name, $value) = explode('=', $line, 2);
+            putenv(trim($name) . '=' . trim($value, " \t\n\r\0\x0B"));
+        }
     }
 }
 

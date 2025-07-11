@@ -13,7 +13,7 @@ function loadEnv($path) {
 }
 
 if (isset($_GET['route'])) {
-    require_once __DIR__ . '/api/main.php';
+    require_once __DIR__ . '/../api/main.php';
     exit;
 }
 

@@ -2,7 +2,6 @@
 
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
-header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
 header('Content-Type: application/json');
@@ -23,19 +22,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-$route = $_GET['route'] ?? '';
+if ($_GET['route'] === 'raids') {
+    header('Content-Type: application/json');
+    handleGetRaids();
+    exit;
+}
 
-switch ($route) {
-    case 'raids':
-        handleGetRaids();
-        break;
-    case 'report':
-        handleReport();
-        break;
-    default:
-        http_response_code(404);
-        echo json_encode(['error' => 'Route nicht gefunden']);
-        break;
+if ($_GET['route'] === 'report') {
+    header('Content-Type: application/json');
+    handleReport();
+    exit;
 }
 
 // Supabase-Daten abrufen

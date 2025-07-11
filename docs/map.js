@@ -196,7 +196,7 @@ document.getElementById("endDate").addEventListener("change", filterAndRender);
 
 loadingOverlay.style.display = "flex"; // << NEU
 
-fetch('/api/main.php?route=raids')
+fetch('/index.php?route=raids')
     .then(res => res.json())
     .then(data => {
         allData = data;
@@ -238,7 +238,7 @@ document.getElementById("reportForm").addEventListener("submit", async function(
     const payload = { message, source, captcha: captchaResponse };
 
     try {
-        const res = await fetch('/api/main.php?route=report', {
+        const res = await fetch('/index.php?route=report', {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)

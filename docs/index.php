@@ -12,6 +12,11 @@ function loadEnv($path) {
     }
 }
 
+if (isset($_GET['route'])) {
+    require_once __DIR__ . '/api/main.php';
+    exit;
+}
+
 loadEnv(__DIR__ . '/../.env');
 
 $recaptchaKey = getenv('RECAPTCHA_SITE_KEY') ?: '';

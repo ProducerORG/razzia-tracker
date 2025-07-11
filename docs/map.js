@@ -189,7 +189,6 @@ function filterAndRender() {
         }
     });
 
-    loadingOverlay.style.display = "none"; // Ladeoverlay ausblenden
 }
 
 document.getElementById("startDate").addEventListener("change", filterAndRender);
@@ -202,10 +201,11 @@ fetch('https://razzia-tracker.onrender.com/api/raids')
     .then(data => {
         allData = data;
         filterAndRender();
+        loadingOverlay.style.display = "none"; // <<< Ladeoverlay erst hier beenden
     })
     .catch(err => {
         console.error("Fehler beim Laden der Daten:", err);
-        loadingOverlay.style.display = "none"; // falls Fehler auftritt
+        loadingOverlay.style.display = "none";
     });
 
 /* MELDEFORMULAR */

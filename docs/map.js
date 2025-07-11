@@ -196,7 +196,7 @@ document.getElementById("endDate").addEventListener("change", filterAndRender);
 
 loadingOverlay.style.display = "flex"; // << NEU
 
-fetch('https://razzia-tracker.onrender.com/api/raids')
+fetch('/api/raids')
     .then(res => res.json())
     .then(data => {
         allData = data;
@@ -238,7 +238,7 @@ document.getElementById("reportForm").addEventListener("submit", async function(
     const payload = { message, source, captcha: captchaResponse };
 
     try {
-        const res = await fetch("https://razzia-tracker.onrender.com/api/report", {
+        const res = await fetch('/api/report', {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload)

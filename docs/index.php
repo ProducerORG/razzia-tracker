@@ -15,7 +15,7 @@ function loadEnv($path) {
 loadEnv(__DIR__ . '/../.env');
 
 $recaptchaKey = getenv('RECAPTCHA_SITE_KEY') ?: '';
-$apiUrl = getenv('API_URL') ?: '';
+$apiUrl = '/api';
 
 echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true) . " -->";
 ?>
@@ -379,7 +379,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
 
             grecaptcha.ready(function () {
                 grecaptcha.execute(recaptchaKey, { action: 'submit' }).then(function (token) {
-                    fetch(apiUrl, {
+                    fetch('/api', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'

@@ -1,0 +1,3 @@
+RewriteEngine On
+RewriteRule ^raids$ main.php [QSA,L]
+RewriteRule ^report$ main.php [QSA,L]

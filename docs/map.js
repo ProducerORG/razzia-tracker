@@ -44,13 +44,36 @@ document.querySelectorAll(".federal-item").forEach(item => {
     if (item.id === 'federalSelectAll') return;
     item.addEventListener("click", () => {
         item.classList.toggle("active");
-        if (item.classList.contains("active")) {
-            item.innerText = "✔ " + item.dataset.name;
-        } else {
-            item.innerText = item.dataset.name;
-        }
+        item.innerText = item.classList.contains("active") ? "✔ " + item.dataset.name : item.dataset.name;
+
+        const allItems = Array.from(document.querySelectorAll(".federal-item"))
+            .filter(i => i.id !== 'federalSelectAll');
+        const allActive = allItems.every(i => i.classList.contains('active'));
+        document.getElementById("federalSelectAll").textContent = allActive ? "Alle abwählen" : "Alle auswählen";
+
         filterAndRender();
     });
+});
+
+document.getElementById("federalSelectAll").addEventListener("click", () => {
+    const items = Array.from(document.querySelectorAll(".federal-item"))
+        .filter(item => item.id !== 'federalSelectAll');
+    const allActive = items.every(item => item.classList.contains("active"));
+
+    items.forEach(item => {
+        if (allActive) {
+            item.classList.remove("active");
+            item.innerText = item.dataset.name;
+        } else {
+            item.classList.add("active");
+            item.innerText = "✔ " + item.dataset.name;
+        }
+    });
+
+    const toggleButton = document.getElementById("federalSelectAll");
+    toggleButton.textContent = allActive ? "Alle auswählen" : "Alle abwählen";
+
+    filterAndRender();
 });
 
 function getSelectedFederals() {
@@ -213,27 +236,6 @@ function filterAndRender() {
 
 document.getElementById("startDate").addEventListener("change", filterAndRender);
 document.getElementById("endDate").addEventListener("change", filterAndRender);
-
-document.getElementById("federalSelectAll").addEventListener("click", () => {
-    const items = Array.from(document.querySelectorAll(".federal-item"))
-        .filter(item => item.id !== 'federalSelectAll');
-    const allActive = items.every(item => item.classList.contains("active"));
-
-    items.forEach(item => {
-        if (allActive) {
-            item.classList.remove("active");
-            item.innerText = item.dataset.name;
-        } else {
-            item.classList.add("active");
-            item.innerText = "✔ " + item.dataset.name;
-        }
-    });
-
-    const toggleButton = document.getElementById("federalSelectAll");
-    toggleButton.textContent = allActive ? "Alle auswählen" : "Alle abwählen";
-
-    filterAndRender();
-});
 
 function showLoading() {
     loadingOverlay.style.display = "flex";

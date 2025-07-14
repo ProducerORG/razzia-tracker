@@ -434,39 +434,5 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
             endInput.value = formatDate(today);
         });
     </script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const selectAllButton = document.getElementById('federalSelectAll');
-            const federalList = document.getElementById('federalList');
-            const federalItems = Array.from(federalList.querySelectorAll('.federal-item'))
-                .filter(item => item.id !== 'federalSelectAll');
-
-            selectAllButton.addEventListener('click', () => {
-                const allActive = federalItems.every(item => item.classList.contains('active'));
-
-                federalItems.forEach(item => {
-                    if (allActive) {
-                        item.classList.remove('active');
-                        item.textContent = item.dataset.name;
-                    } else {
-                        item.classList.add('active');
-                        item.textContent = '✔ ' + item.dataset.name;
-                    }
-                });
-
-                selectAllButton.textContent = allActive ? 'Alle auswählen' : 'Alle abwählen';
-            });
-
-            federalItems.forEach(item => {
-                item.addEventListener('click', () => {
-                    item.classList.toggle('active');
-                    item.textContent = (item.classList.contains('active') ? '✔ ' : '') + item.dataset.name;
-
-                    const allActive = federalItems.every(i => i.classList.contains('active'));
-                    selectAllButton.textContent = allActive ? 'Alle abwählen' : 'Alle auswählen';
-                });
-            });
-        });
-    </script>
 </body>
 </html>

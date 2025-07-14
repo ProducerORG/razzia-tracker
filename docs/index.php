@@ -280,9 +280,9 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
     </div>
     <div class="map-container">
         <div id="map"></div>
-        <!-- <div id="mapLoadingOverlay">
+        <div id="mapLoadingOverlay">
             <div class="loader-circle"></div>
-        </div> -->
+        </div> 
     </div>
     <div class="info-panel">
         <div class="top-right-info">Beobachtung seit 01.07.2025</div>

@@ -1,6 +1,6 @@
 const initialMinZoom = window.innerWidth < 768 ? 3 : 6;
 const initialZoom = window.innerWidth < 768 ? 4 : 6;
-//const loadingOverlay = document.getElementById("mapLoadingOverlay");
+const loadingOverlay = document.getElementById("mapLoadingOverlay");
 
 const map = L.map('map', {
     minZoom: initialMinZoom,
@@ -112,11 +112,11 @@ fetch('/index.php?route=raids', { cache: "no-store" })
     .then(data => {
         allData = data;
         filterAndRender();
-        //hideLoading();
+        hideLoading();
     })
     .catch(err => {
         console.error("Fehler beim Laden der Daten:", err);
-        //hideLoading();
+        hideLoading();
     });
 
 hideLoading();

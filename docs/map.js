@@ -1,6 +1,6 @@
 const initialMinZoom = window.innerWidth < 768 ? 3 : 6;
 const initialZoom = window.innerWidth < 768 ? 4 : 6;
-const loadingOverlay = document.getElementById("mapLoadingOverlay");
+//const loadingOverlay = document.getElementById("mapLoadingOverlay");
 
 const map = L.map('map', {
     minZoom: initialMinZoom,
@@ -111,14 +111,14 @@ fetch('/index.php?route=raids', { cache: "no-store" })
     .then(data => {
         allData = data;
         filterAndRender();
-        hideLoading();
+        //hideLoading();
     })
     .catch(err => {
         console.error("Fehler beim Laden der Daten:", err);
-        hideLoading();
+        //hideLoading();
     });
 
-hideLoading();
+//hideLoading();
 
 function filterAndRender() {
     if (!geoLayer) return;
@@ -205,20 +205,20 @@ function filterAndRender() {
             }
         });
 
-        hideLoading(); // Ladeoverlay hier sicher entfernen
+        //hideLoading(); // Ladeoverlay hier sicher entfernen
     }, 100); // Kurzes Timeout, damit UI den Wechsel sauber registriert
 }
 
 document.getElementById("startDate").addEventListener("change", filterAndRender);
 document.getElementById("endDate").addEventListener("change", filterAndRender);
 
-function showLoading() {
+/* function showLoading() {
     loadingOverlay.style.display = "flex";
 }
 
 function hideLoading() {
     loadingOverlay.style.display = "none";
-}
+} */
 
 /* MELDEFORMULAR */
 

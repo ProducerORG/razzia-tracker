@@ -137,6 +137,7 @@ foreach ($articles as $article) {
         $type = $gptResult['typ'] ?? "Sonstige";
         $gptLat = $gptResult['koord']['lat'] ?? null;
         $gptLon = $gptResult['koord']['lon'] ?? null;
+        $federal = $gptResult['bundesland'] ?? null;
 
         if ($gptOrt) {
             echo "[GPT] Ort erkannt: $gptOrt\n";
@@ -169,12 +170,17 @@ foreach ($articles as $article) {
     }
 
     // Bundesland ermitteln (sofern Koordinaten vorhanden)
-    $federal = null;
-    if ($lat && $lon) {
+    $federal = $gptResult['bundesland'] ?? null;
+
+    if (!$federal && $lat && $lon) {
         $federal = getFederalState($lat, $lon);
         if ($federal) {
-            echo "[INFO] Bundesland: $federal\n";
+            echo "[INFO] Bundesland (Koordinaten-Fallback): $federal\n";
         }
+    }
+
+    if ($federal) {
+        echo "[INFO] Bundesland: $federal\n";
     }
 
     // Robuste Extraktion des Veröffentlichungsdatums aus dem <time datetime="">
@@ -317,6 +323,7 @@ function extractMetadataWithGPT($text) {
 - 'ort': Der Ort, wo der Vorfall stattgefunden hat. Gib ausschließlich den Ortsnamen zurück, ohne Zusätze wie 'in', 'bei' oder 'nahe'.
 - 'typ': Einer der Werte: 'Automatenspiel', 'Wetten', 'Online-Spiele'. Je nach dem, was im Text am ehesten zutrifft. Trifft defintiv nichts davon zu, gib den Wert 'Sonstige' zurück.
 - 'koord': Falls ermittelbar, ein Objekt mit 'lat' und 'lon' (sonst null). Die Koordinaten müssen unbedingt dem deutschen Ort entsprechen, wo der Vorfall stattgefunden hat.
+- 'bundesland': Das deutsche Bundesland des Orts (z. B. 'Nordrhein-Westfalen', 'Bayern'). Falls nicht bestimmbar, null.
 - 'illegal': true oder false. Gib 'true' zurück, **wenn es sich eindeutig um illegales Glücksspiel handelt**. Gib 'false' zurück, **wenn es um andere Vorfälle wie Diebstahl, Einbruch, Überfall, Geldwäsche, oder Straftaten im Umfeld legaler Glücksspiele geht.**
 
 Text:\n" . mb_substr($text, 0, 2000);

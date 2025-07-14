@@ -108,104 +108,114 @@ function getColoredIcon(color) {
 function filterAndRender() {
     if (!geoLayer) return;
 
-    loadingOverlay.style.display = "flex"; // Ladeoverlay einblenden
+    showLoading()  // Ladeoverlay einblenden
 
-    const startDateInput = document.getElementById("startDate").value;
-    const endDateInput = document.getElementById("endDate").value;
-    const startDate = startDateInput ? new Date(startDateInput) : null;
-    const endDate = endDateInput ? new Date(endDateInput) : new Date();
-    const selectedFederals = getSelectedFederals();
+    setTimeout(() => {
+        const startDateInput = document.getElementById("startDate").value;
+        const endDateInput = document.getElementById("endDate").value;
+        const startDate = startDateInput ? new Date(startDateInput) : null;
+        const endDate = endDateInput ? new Date(endDateInput) : new Date();
+        const selectedFederals = getSelectedFederals();
 
-    clearMarkers();
+        clearMarkers();
 
-    let count = 0;
-    let filteredDates = [];
+        let count = 0;
+        let filteredDates = [];
 
-    const positionOffsetMap = new Map();
+        const positionOffsetMap = new Map();
 
-    allData.forEach(entry => {
-        if (entry.federal && !selectedFederals.includes(entry.federal)) return;
-        const lat = parseFloat(entry.lat);
-        const lon = parseFloat(entry.lon);
-        if (isNaN(lat) || isNaN(lon)) return;
+        allData.forEach(entry => {
+            if (entry.federal && !selectedFederals.includes(entry.federal)) return;
+            const lat = parseFloat(entry.lat);
+            const lon = parseFloat(entry.lon);
+            if (isNaN(lat) || isNaN(lon)) return;
 
-        const entryDate = new Date(entry.date);
-        if (startDate && entryDate < startDate) return;
-        if (endDate && entryDate > endDate) return;
+            const entryDate = new Date(entry.date);
+            if (startDate && entryDate < startDate) return;
+            if (endDate && entryDate > endDate) return;
 
-        filteredDates.push(entryDate);
+            filteredDates.push(entryDate);
 
-        const key = `${lat},${lon}`;
-        const offsetIndex = positionOffsetMap.get(key) || 0;
-        positionOffsetMap.set(key, offsetIndex + 1);
+            const key = `${lat},${lon}`;
+            const offsetIndex = positionOffsetMap.get(key) || 0;
+            positionOffsetMap.set(key, offsetIndex + 1);
 
-        const angle = (offsetIndex * 50) * (Math.PI / 180);
-        const ring = Math.floor(offsetIndex / 8);
-        const radius = 0.1 + 0.05 * ring;
-        const latOffset = lat + radius * Math.cos(angle);
-        const lonOffset = lon + radius * Math.sin(angle);
+            const angle = (offsetIndex * 50) * (Math.PI / 180);
+            const ring = Math.floor(offsetIndex / 8);
+            const radius = 0.1 + 0.05 * ring;
+            const latOffset = lat + radius * Math.cos(angle);
+            const lonOffset = lon + radius * Math.sin(angle);
 
-        const marker = L.marker([latOffset, lonOffset], {
-            icon: getColoredIcon(getColor(entry.type))
+            const marker = L.marker([latOffset, lonOffset], {
+                icon: getColoredIcon(getColor(entry.type))
+            });
+
+            marker.bindPopup(`
+                <b>${entry.title}</b>
+                <div style="padding-bottom: 8px;">${entry.summary}</div>
+                <div style="display: flex; justify-content: flex-end;">
+                    <a href="${entry.url}" target="_blank">Mehr erfahren</a>
+                </div>
+            `);
+            
+            const zIndex = 10000 - Math.floor((new Date() - entryDate) / (1000 * 60 * 60 * 24));
+            marker.setZIndexOffset(zIndex);
+
+            marker.addTo(map);
+            markers.push(marker);
+            count++;
         });
 
-        marker.bindPopup(`
-            <b>${entry.title}</b>
-            <div style="padding-bottom: 8px;">${entry.summary}</div>
-            <div style="display: flex; justify-content: flex-end;">
-                <a href="${entry.url}" target="_blank">Mehr erfahren</a>
-            </div>
-        `);
-        
-        const zIndex = 10000 - Math.floor((new Date() - entryDate) / (1000 * 60 * 60 * 24));
-        marker.setZIndexOffset(zIndex);
-
-        marker.addTo(map);
-        markers.push(marker);
-        count++;
-    });
-
-    let infoText = "";
-    if (filteredDates.length > 0) {
-        const minDate = new Date(Math.min(...filteredDates));
-        const maxDate = new Date(Math.max(...filteredDates));
-        const days = Math.floor((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1;
-        const formattedMinDate = minDate.toLocaleDateString('de-DE');
-        infoText = `${count} in ${days} Tagen`;
-    } else {
-        infoText = `${count} Einträge`;
-    }
-
-    const entryDisplay = document.getElementById("entryCount");
-    entryDisplay.innerText = infoText;
-    entryDisplay.style.fontSize = "1.2rem";
-
-    geoLayer.eachLayer(layer => {
-        const name = layer.feature.properties.NAME_1;
-        if (selectedFederals.includes(name)) {
-            layer.setStyle({ opacity: 0.8, fillOpacity: 0.3 });
+        let infoText = "";
+        if (filteredDates.length > 0) {
+            const minDate = new Date(Math.min(...filteredDates));
+            const maxDate = new Date(Math.max(...filteredDates));
+            const days = Math.floor((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1;
+            const formattedMinDate = minDate.toLocaleDateString('de-DE');
+            infoText = `${count} in ${days} Tagen`;
         } else {
-            layer.setStyle({ opacity: 0.2, fillOpacity: 0.1 });
+            infoText = `${count} Einträge`;
         }
-    });
 
+        const entryDisplay = document.getElementById("entryCount");
+        entryDisplay.innerText = infoText;
+        entryDisplay.style.fontSize = "1.2rem";
+
+        geoLayer.eachLayer(layer => {
+            const name = layer.feature.properties.NAME_1;
+            if (selectedFederals.includes(name)) {
+                layer.setStyle({ opacity: 0.8, fillOpacity: 0.3 });
+            } else {
+                layer.setStyle({ opacity: 0.2, fillOpacity: 0.1 });
+            }
+        });
+
+        hideLoading(); // Ladeoverlay hier sicher entfernen
+    }, 100); // Kurzes Timeout, damit UI den Wechsel sauber registriert
 }
 
 document.getElementById("startDate").addEventListener("change", filterAndRender);
 document.getElementById("endDate").addEventListener("change", filterAndRender);
 
-loadingOverlay.style.display = "flex"; // << NEU
+function showLoading() {
+    loadingOverlay.style.display = "flex";
+}
 
+function hideLoading() {
+    loadingOverlay.style.display = "none";
+}
+
+showLoading();
 fetch('/index.php?route=raids')
     .then(res => res.json())
     .then(data => {
         allData = data;
         filterAndRender();
-        loadingOverlay.style.display = "none"; // <<< Ladeoverlay erst hier beenden
+        hideLoading();
     })
     .catch(err => {
         console.error("Fehler beim Laden der Daten:", err);
-        loadingOverlay.style.display = "none";
+        hideLoading();
     });
 
 /* MELDEFORMULAR */

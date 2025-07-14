@@ -298,7 +298,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
         <div id="federalFilterContainer">
             <button id="toggleFederalButton">Auswählen</button>
             <div id="federalList" style="display:none; margin-top: 1rem;">
-                <div id="federalToggleAll" class="federal-item">Alle auswählen</div>
+                <div id="federalSelectAll" class="federal-item">Alle auswählen</div>
                 <div class="federal-item active" data-name="Baden-Württemberg">✔ Baden-Württemberg</div>
                 <div class="federal-item active" data-name="Bayern">✔ Bayern</div>
                 <div class="federal-item active" data-name="Berlin">✔ Berlin</div>

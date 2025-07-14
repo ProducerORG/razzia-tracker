@@ -49,7 +49,15 @@ document.querySelectorAll(".federal-item").forEach(item => {
         const allItems = Array.from(document.querySelectorAll(".federal-item"))
             .filter(i => i.id !== 'federalSelectAll');
         const allActive = allItems.every(i => i.classList.contains('active'));
-        document.getElementById("federalSelectAll").textContent = allActive ? "Alle abwählen" : "Alle auswählen";
+
+        const toggleButton = document.getElementById("federalSelectAll");
+        toggleButton.textContent = allActive ? "Alle abwählen" : "Alle auswählen";
+
+        if (allActive) {
+            toggleButton.classList.add("active");
+        } else {
+            toggleButton.classList.remove("active");
+        }
 
         filterAndRender();
     });
@@ -72,6 +80,12 @@ document.getElementById("federalSelectAll").addEventListener("click", () => {
 
     const toggleButton = document.getElementById("federalSelectAll");
     toggleButton.textContent = allActive ? "Alle auswählen" : "Alle abwählen";
+
+    if (allActive) {
+        toggleButton.classList.remove("active");
+    } else {
+        toggleButton.classList.add("active");
+    }
 
     filterAndRender();
 });

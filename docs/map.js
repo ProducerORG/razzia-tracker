@@ -41,6 +41,7 @@ document.getElementById("toggleFederalButton").addEventListener("click", () => {
 });
 
 document.querySelectorAll(".federal-item").forEach(item => {
+    if (item.id === 'federalSelectAll') return;
     item.addEventListener("click", () => {
         item.classList.toggle("active");
         if (item.classList.contains("active")) {
@@ -105,7 +106,7 @@ function getColoredIcon(color) {
     });
 }
 
-//showLoading();
+showLoading();
 fetch('/index.php?route=raids', { cache: "no-store" })
     .then(res => res.json())
     .then(data => {
@@ -118,12 +119,13 @@ fetch('/index.php?route=raids', { cache: "no-store" })
         //hideLoading();
     });
 
-//hideLoading();
+hideLoading();
+
 
 function filterAndRender() {
     if (!geoLayer) return;
 
-    //showLoading()  // Ladeoverlay einblenden
+    showLoading()  // Ladeoverlay einblenden
 
     setTimeout(() => {
         const startDateInput = document.getElementById("startDate").value;
@@ -205,20 +207,41 @@ function filterAndRender() {
             }
         });
 
-        //hideLoading(); // Ladeoverlay hier sicher entfernen
+        hideLoading(); // Ladeoverlay hier sicher entfernen
     }, 100); // Kurzes Timeout, damit UI den Wechsel sauber registriert
 }
 
 document.getElementById("startDate").addEventListener("change", filterAndRender);
 document.getElementById("endDate").addEventListener("change", filterAndRender);
 
-/* function showLoading() {
+document.getElementById("federalSelectAll").addEventListener("click", () => {
+    const items = Array.from(document.querySelectorAll(".federal-item"))
+        .filter(item => item.id !== 'federalSelectAll');
+    const allActive = items.every(item => item.classList.contains("active"));
+
+    items.forEach(item => {
+        if (allActive) {
+            item.classList.remove("active");
+            item.innerText = item.dataset.name;
+        } else {
+            item.classList.add("active");
+            item.innerText = "✔ " + item.dataset.name;
+        }
+    });
+
+    const toggleButton = document.getElementById("federalSelectAll");
+    toggleButton.textContent = allActive ? "Alle auswählen" : "Alle abwählen";
+
+    filterAndRender();
+});
+
+function showLoading() {
     loadingOverlay.style.display = "flex";
 }
 
 function hideLoading() {
     loadingOverlay.style.display = "none";
-} */
+}
 
 /* MELDEFORMULAR */
 

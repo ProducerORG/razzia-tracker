@@ -2,9 +2,10 @@
 
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
+header("Access-Control-Allow-Origin: *"); // Falls du CORS brauchst
 header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
-header('Content-Type: application/json');
+header("Content-Type: application/json; charset=utf-8");
 
 if (!function_exists('loadEnv')) {
     function loadEnv($path) {
@@ -21,7 +22,8 @@ loadEnv(__DIR__ . '/../.env');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
-    exit();
+    echo json_encode(['status' => 'ok']);
+    exit;
 }
 
 if ($_GET['route'] === 'raids') {
@@ -67,7 +69,14 @@ function handleGetRaids() {
     }
 
     curl_close($ch);
+
+    if (empty($response)) {
+        echo json_encode([]);
+        exit;
+    }
+
     echo $response;
+    exit;
 }
 
 // E-Mail-Report verarbeiten

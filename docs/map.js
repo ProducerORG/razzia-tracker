@@ -106,7 +106,7 @@ function getColoredIcon(color) {
 }
 
 showLoading();
-fetch('/index.php?route=raids')
+fetch('/index.php?route=raids', { cache: "no-store" })
     .then(res => res.json())
     .then(data => {
         allData = data;

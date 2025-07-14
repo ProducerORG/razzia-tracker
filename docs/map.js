@@ -105,6 +105,21 @@ function getColoredIcon(color) {
     });
 }
 
+showLoading();
+fetch('/index.php?route=raids')
+    .then(res => res.json())
+    .then(data => {
+        allData = data;
+        filterAndRender();
+        hideLoading();
+    })
+    .catch(err => {
+        console.error("Fehler beim Laden der Daten:", err);
+        hideLoading();
+    });
+    
+hideLoading();
+
 function filterAndRender() {
     if (!geoLayer) return;
 
@@ -204,19 +219,6 @@ function showLoading() {
 function hideLoading() {
     loadingOverlay.style.display = "none";
 }
-
-showLoading();
-fetch('/index.php?route=raids')
-    .then(res => res.json())
-    .then(data => {
-        allData = data;
-        filterAndRender();
-        hideLoading();
-    })
-    .catch(err => {
-        console.error("Fehler beim Laden der Daten:", err);
-        hideLoading();
-    });
 
 /* MELDEFORMULAR */
 

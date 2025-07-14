@@ -105,7 +105,7 @@ function getColoredIcon(color) {
     });
 }
 
-showLoading();
+//showLoading();
 fetch('/index.php?route=raids', { cache: "no-store" })
     .then(res => res.json())
     .then(data => {
@@ -117,13 +117,13 @@ fetch('/index.php?route=raids', { cache: "no-store" })
         console.error("Fehler beim Laden der Daten:", err);
         hideLoading();
     });
-    
+
 hideLoading();
 
 function filterAndRender() {
     if (!geoLayer) return;
 
-    showLoading()  // Ladeoverlay einblenden
+    //showLoading()  // Ladeoverlay einblenden
 
     setTimeout(() => {
         const startDateInput = document.getElementById("startDate").value;

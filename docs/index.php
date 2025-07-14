@@ -298,6 +298,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
         <div id="federalFilterContainer">
             <button id="toggleFederalButton">Auswählen</button>
             <div id="federalList" style="display:none; margin-top: 1rem;">
+                <div id="federalToggleAll" class="federal-item">Alle auswählen</div>
                 <div class="federal-item active" data-name="Baden-Württemberg">✔ Baden-Württemberg</div>
                 <div class="federal-item active" data-name="Bayern">✔ Bayern</div>
                 <div class="federal-item active" data-name="Berlin">✔ Berlin</div>
@@ -432,6 +433,38 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
             startInput.value = '2025-07-01';
             endInput.value = formatDate(today);
         });
+        document.addEventListener('DOMContentLoaded', function () {
+            const federalList = document.getElementById('federalList');
+            const toggleAllButton = document.getElementById('federalToggleAll');
+            const federalItems = Array.from(federalList.querySelectorAll('.federal-item')).filter(item => item.id !== 'federalToggleAll');
+
+            toggleAllButton.addEventListener('click', () => {
+                const allActive = federalItems.every(item => item.classList.contains('active'));
+
+                federalItems.forEach(item => {
+                    if (allActive) {
+                        item.classList.remove('active');
+                        item.textContent = item.dataset.name;
+                    } else {
+                        item.classList.add('active');
+                        item.textContent = '✔ ' + item.dataset.name;
+                    }
+                });
+
+                toggleAllButton.textContent = allActive ? 'Alle auswählen' : 'Alle abwählen';
+            });
+
+            federalItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    item.classList.toggle('active');
+                    item.textContent = (item.classList.contains('active') ? '✔ ' : '') + item.dataset.name;
+
+                    const allActive = federalItems.every(i => i.classList.contains('active'));
+                    toggleAllButton.textContent = allActive ? 'Alle abwählen' : 'Alle auswählen';
+                });
+            });
+        });
+
     </script>
 </body>
 </html>

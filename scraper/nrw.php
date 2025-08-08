@@ -124,7 +124,7 @@ Text:\n" . mb_substr($text, 0, 2000);
         "messages" => [
             ["role" => "user", "content" => $prompt]
         ],
-        "temperature" => 0.1
+        "temperature"=> 0.1
     ];
     $headers = [
         "Authorization: Bearer $apiKey",
@@ -178,18 +178,26 @@ function urlExistsInDatabase($url) {
 // Konfiguration aus .env
 $KEYWORDS = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
 
-$RSS_BASE = 'https://polizei.nrw/presse/pressemitteilungen/rss/all/all/all/all';
-echo "[INFO] RSS-URL: $RSS_BASE\n";
-echo "[INFO] Schlüsselwörter: " . implode(', ', $KEYWORDS) . "\n";
+// Zielmenge & Grenzen
+$TARGET_ITEMS   = intval($_ENV['NRW_TARGET_ITEMS'] ?? 100); // gewünschte Anzahl (50/100)
+$MAX_RSS_PAGES  = intval($_ENV['NRW_RSS_PAGES'] ?? 2);      // 0..N RSS-Seiten
+$MAX_HTML_PAGES = intval($_ENV['NRW_HTML_PAGES'] ?? 10);    // 0..N HTML-Seiten
 
-// Wie viele RSS-Seiten holen? page=0 ist die erste. Pro Seite ~25 Items.
-$MAX_RSS_PAGES = 4; // ergibt ca. bis zu ~100 Items
-$articles = [];
-$seenUrls = [];
+$RSS_BASE   = 'https://polizei.nrw/presse/pressemitteilungen/rss/all/all/all/all';
+$LIST_BASE  = 'https://polizei.nrw/presse/pressemitteilungen';
+
+echo "[INFO] RSS-URL: $RSS_BASE\n";
+echo "[INFO] Listen-URL: $LIST_BASE\n";
+echo "[INFO] Schlüsselwörter: " . implode(', ', $KEYWORDS) . "\n";
+echo "[INFO] Ziel: $TARGET_ITEMS Einträge\n";
+
+$articles   = [];
+$seenUrls   = [];
 $totalFetched = 0;
 
 libxml_use_internal_errors(true);
 
+/* --- 1) RSS einsammeln --- */
 for ($page = 0; $page < $MAX_RSS_PAGES; $page++) {
     $rssUrl = $RSS_BASE . ($page > 0 ? '?page=' . $page : '');
     echo "[INFO] Lade RSS-Seite $page: $rssUrl\n";
@@ -202,19 +210,16 @@ for ($page = 0; $page < $MAX_RSS_PAGES; $page++) {
     $xml = @simplexml_load_string($rssXml);
     if (!$xml || !isset($xml->channel->item)) {
         echo "[WARN] Keine Items auf RSS-Seite $page\n";
-        // Früh abbrechen, wenn ab Seite>0 nichts mehr kommt
         if ($page > 0) break;
         continue;
     }
 
     $newOnThisPage = 0;
-
     foreach ($xml->channel->item as $item) {
         $title = trim((string)$item->title);
         $link  = trim((string)$item->link);
         $pub   = trim((string)$item->pubDate);
 
-        // absolute URL erzwingen
         if ($link !== '' && strpos($link, 'http') !== 0) {
             $link = 'https://polizei.nrw' . (substr($link, 0, 1) === '/' ? '' : '/') . $link;
         }
@@ -231,19 +236,78 @@ for ($page = 0; $page < $MAX_RSS_PAGES; $page++) {
         $articles[] = ["title" => $title, "url" => $link, "rssDate" => $dateRss];
         $newOnThisPage++;
         $totalFetched++;
+
+        if ($totalFetched >= $TARGET_ITEMS) break;
     }
 
     echo "[INFO] RSS-Seite $page: neu gesammelt: $newOnThisPage, gesamt: $totalFetched\n";
+    if ($newOnThisPage === 0 || $totalFetched >= $TARGET_ITEMS) break;
+    usleep(300000); // 0,3s Pause
+}
 
-    // Wenn keine neuen Items mehr geliefert werden, Abbruch.
-    if ($newOnThisPage === 0) break;
+/* --- 2) Falls zu wenig: HTML-Listenansicht mit ?page= nachladen --- */
+if ($totalFetched < $TARGET_ITEMS) {
+    $opts = ["http" => ["header" => "User-Agent: razzia-map/1.0"]];
+    $ctx  = stream_context_create($opts);
 
-    usleep(300000); // 0,3s Pause zwischen RSS-Requests
+    for ($page = 0; $page < $MAX_HTML_PAGES && $totalFetched < $TARGET_ITEMS; $page++) {
+        $listUrl = $LIST_BASE . ($page > 0 ? '?page=' . $page : '');
+        echo "[INFO] Lade HTML-Seite $page: $listUrl\n";
+
+        $html = @file_get_contents($listUrl, false, $ctx);
+        if (!$html) {
+            echo "[WARN] HTML konnte nicht geladen werden: $listUrl\n";
+            continue;
+        }
+
+        $dom = new DOMDocument();
+        @$dom->loadHTML($html);
+        $xpath = new DOMXPath($dom);
+
+        // Titel-Links aus der Ergebnisliste
+        $nodes = $xpath->query("//div[contains(@class,'view-content')]//div[contains(@class,'views-row')]//h2[contains(@class,'field-title')]/a");
+        if (!$nodes || $nodes->length === 0) {
+            echo "[WARN] Keine Artikel-Links auf Seite $page gefunden\n";
+            if ($page > 0) break;
+            continue;
+        }
+
+        $newOnThisPage = 0;
+        foreach ($nodes as $node) {
+            $title = trim($node->textContent);
+            $href  = $node->getAttribute('href');
+            $fullUrl = (strpos($href, 'http') === 0) ? $href : "https://polizei.nrw$href";
+
+            if (isset($seenUrls[$fullUrl])) continue;
+
+            // Veröffentlichungszeit in der Listenansicht (Sibling im gleichen Block)
+            $timeNode = $xpath->query("ancestor::div[contains(@class,'fields-wrapper')]//time", $node)->item(0);
+            $listDatetime = $timeNode ? $timeNode->getAttribute('datetime') : null;
+
+            $dateList = null;
+            if ($listDatetime && preg_match('/^(\d{4})-(\d{2})-(\d{2})/',$listDatetime,$m)) {
+                $dateList = "{$m[1]}-{$m[2]}-{$m[3]}";
+            }
+
+            $seenUrls[$fullUrl] = true;
+            $articles[] = ["title" => $title, "url" => $fullUrl, "rssDate" => $dateList];
+            $newOnThisPage++;
+            $totalFetched++;
+
+            if ($totalFetched >= $TARGET_ITEMS) break;
+        }
+
+        echo "[INFO] HTML-Seite $page: neu gesammelt: $newOnThisPage, gesamt: $totalFetched\n";
+        if ($newOnThisPage === 0) break;
+
+        usleep(300000); // 0,3s Pause zwischen Seiten
+    }
 }
 
 $relevantCount = 0;
 
-// Artikel verarbeiten
+/* ----------------- Verarbeitung der Artikel ----------------- */
+
 foreach ($articles as $article) {
     if (urlExistsInDatabase($article["url"])) {
         echo "[INFO] Artikel bereits in Datenbank, übersprungen: {$article['url']}\n";
@@ -341,7 +405,7 @@ foreach ($articles as $article) {
     }
     if ($federal) echo "[INFO] Bundesland: $federal\n";
 
-    // Veröffentlichungsdatum: <time datetime> bevorzugt, sonst RSS
+    // Veröffentlichungsdatum: <time datetime> bevorzugt, sonst RSS/List-Fallback
     $date = null;
     $dateNode = $xpath2->query("//time[@datetime]")->item(0);
     if ($dateNode) {
@@ -353,7 +417,7 @@ foreach ($articles as $article) {
     }
     if (!$date && !empty($article['rssDate'])) {
         $date = $article['rssDate'];
-        echo "[DEBUG] Veröffentlichungsdatum (RSS/Fallback): $date\n";
+        echo "[DEBUG] Veröffentlichungsdatum (Fallback): $date\n";
     }
     if (!$date) {
         echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";

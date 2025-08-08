@@ -5,7 +5,126 @@ require_once __DIR__ . '/../vendor/autoload.php';
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/../');
 $dotenv->load();
 
-/* ----------------- Hilfsfunktionen ZUERST definieren (mit Guards) ----------------- */
+/* ----------------- Hilfsfunktionen ZUERST (mit Guards) ----------------- */
+
+if (!function_exists('http_get')) {
+function http_get($url, $headers = []) {
+    $opts = [
+        "http" => [
+            "method" => "GET",
+            "header" => array_merge([
+                "User-Agent: razzia-map/1.0",
+                "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            ], $headers),
+            "ignore_errors" => true,
+            "timeout" => 30
+        ]
+    ];
+    $ctx = stream_context_create($opts);
+    return @file_get_contents($url, false, $ctx);
+}
+}
+
+if (!function_exists('http_post_form')) {
+function http_post_form($url, $fields, $headers = []) {
+    $body = http_build_query($fields, '', '&');
+    $opts = [
+        "http" => [
+            "method" => "POST",
+            "header" => array_merge([
+                "User-Agent: razzia-map/1.0",
+                "Content-Type: application/x-www-form-urlencoded; charset=UTF-8",
+                "X-Requested-With: XMLHttpRequest",
+                "Accept: application/json, text/javascript, */*; q=0.01",
+                "Origin: https://polizei.nrw",
+                "Referer: https://polizei.nrw/presse/pressemitteilungen",
+            ], $headers),
+            "content" => $body,
+            "ignore_errors" => true,
+            "timeout" => 30
+        ]
+    ];
+    $ctx = stream_context_create($opts);
+    return @file_get_contents($url, false, $ctx);
+}
+}
+
+if (!function_exists('extract_drupal_view_context')) {
+function extract_drupal_view_context($html) {
+    $ctx = [
+        'view_name' => null,
+        'view_display_id' => null,
+        'view_args' => '',
+        'view_path' => '',
+        'view_base_path' => '',
+        'view_dom_id' => null,
+        'pager_element' => 0,
+        'ajax_theme' => null,
+        'ajax_libraries' => null,
+    ];
+
+    // <script type="application/json" data-drupal-selector="drupal-settings-json">...</script>
+    if (!preg_match('#<script[^>]+data-drupal-selector="drupal-settings-json"[^>]*>(.*?)</script>#si', $html, $m)) {
+        return $ctx;
+    }
+    $json = html_entity_decode($m[1], ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $settings = json_decode($json, true);
+    if (!is_array($settings)) return $ctx;
+
+    // ajaxPageState
+    if (isset($settings['ajaxPageState']['theme'])) $ctx['ajax_theme'] = $settings['ajaxPageState']['theme'];
+    if (isset($settings['ajaxPageState']['libraries'])) $ctx['ajax_libraries'] = $settings['ajaxPageState']['libraries'];
+
+    // views.ajaxViews: wir nehmen den ersten Eintrag
+    if (isset($settings['views']['ajaxViews']) && is_array($settings['views']['ajaxViews'])) {
+        $first = reset($settings['views']['ajaxViews']);
+        if (is_array($first)) {
+            $ctx['view_name'] = $first['view_name'] ?? null;
+            $ctx['view_display_id'] = $first['view_display_id'] ?? null;
+            $ctx['view_args'] = $first['view_args'] ?? '';
+            $ctx['view_path'] = $first['view_path'] ?? '';
+            $ctx['view_base_path'] = $first['view_base_path'] ?? '';
+            $ctx['view_dom_id'] = $first['view_dom_id'] ?? null;
+            $ctx['pager_element'] = $first['pager_element'] ?? 0;
+        }
+    }
+    return $ctx;
+}
+}
+
+if (!function_exists('parse_list_items_from_html')) {
+function parse_list_items_from_html($html) {
+    $items = [];
+    $dom = new DOMDocument();
+    @$dom->loadHTML($html);
+    $xpath = new DOMXPath($dom);
+    $nodes = $xpath->query("//div[contains(@class,'view-content')]//div[contains(@class,'views-row')]//h2[contains(@class,'field-title')]/a");
+    if (!$nodes || $nodes->length === 0) {
+        // Fallback: direkter h2/a
+        $nodes = $xpath->query("//h2[contains(@class,'field-title')]/a");
+    }
+    foreach ($nodes as $node) {
+        $title = trim($node->textContent);
+        $href  = $node->getAttribute('href') ?: '';
+        if ($href !== '' && strpos($href, 'http') !== 0) {
+            $href = "https://polizei.nrw" . (substr($href, 0, 1) === '/' ? '' : '/') . $href;
+        }
+        if ($href) {
+            // evtl. Datum aus Nachbar-<time>
+            $timeNode = $xpath->query("ancestor::div[contains(@class,'fields-wrapper')]//time", $node)->item(0);
+            $dateList = null;
+            if ($timeNode) {
+                $dt = $timeNode->getAttribute('datetime');
+                if ($dt && preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $dt, $mm)) {
+                    $dateList = "{$mm[1]}-{$mm[2]}-{$mm[3]}";
+                }
+            }
+            $items[] = ['title' => $title, 'url' => $href, 'rssDate' => $dateList];
+        }
+    }
+    return $items;
+}
+}
 
 if (!function_exists('extractLocation')) {
 function extractLocation($text) {
@@ -124,7 +243,7 @@ Text:\n" . mb_substr($text, 0, 2000);
         "messages" => [
             ["role" => "user", "content" => $prompt]
         ],
-        "temperature"=> 0.1
+        "temperature" => 0.1
     ];
     $headers = [
         "Authorization: Bearer $apiKey",
@@ -175,34 +294,33 @@ function urlExistsInDatabase($url) {
 
 /* ----------------- Hauptlogik ----------------- */
 
-// Konfiguration aus .env
-$KEYWORDS = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
-
-// Zielmenge & Grenzen
-$TARGET_ITEMS   = intval($_ENV['NRW_TARGET_ITEMS'] ?? 100); // gewünschte Anzahl (50/100)
-$MAX_RSS_PAGES  = intval($_ENV['NRW_RSS_PAGES'] ?? 2);      // 0..N RSS-Seiten
-$MAX_HTML_PAGES = intval($_ENV['NRW_HTML_PAGES'] ?? 10);    // 0..N HTML-Seiten
+// Konfiguration
+$KEYWORDS       = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
+$TARGET_ITEMS   = max(1, intval($_ENV['NRW_TARGET_ITEMS'] ?? 100));
+$MAX_RSS_PAGES  = max(1, intval($_ENV['NRW_RSS_PAGES'] ?? 2));   // RSS
+$MAX_AJAX_PAGES = max(1, intval($_ENV['NRW_AJAX_PAGES'] ?? 10)); // AJAX „mehr Ergebnisse“
 
 $RSS_BASE   = 'https://polizei.nrw/presse/pressemitteilungen/rss/all/all/all/all';
 $LIST_BASE  = 'https://polizei.nrw/presse/pressemitteilungen';
+$AJAX_URL   = 'https://polizei.nrw/views/ajax';
 
 echo "[INFO] RSS-URL: $RSS_BASE\n";
 echo "[INFO] Listen-URL: $LIST_BASE\n";
 echo "[INFO] Schlüsselwörter: " . implode(', ', $KEYWORDS) . "\n";
 echo "[INFO] Ziel: $TARGET_ITEMS Einträge\n";
 
-$articles   = [];
-$seenUrls   = [];
+$articles = [];
+$seenUrls = [];
 $totalFetched = 0;
 
 libxml_use_internal_errors(true);
 
-/* --- 1) RSS einsammeln --- */
-for ($page = 0; $page < $MAX_RSS_PAGES; $page++) {
+/* --- 1) RSS sammeln --- */
+for ($page = 0; $page < $MAX_RSS_PAGES && $totalFetched < $TARGET_ITEMS; $page++) {
     $rssUrl = $RSS_BASE . ($page > 0 ? '?page=' . $page : '');
     echo "[INFO] Lade RSS-Seite $page: $rssUrl\n";
 
-    $rssXml = @file_get_contents($rssUrl);
+    $rssXml = http_get($rssUrl);
     if (!$rssXml) {
         echo "[WARN] RSS konnte nicht geladen werden: $rssUrl\n";
         continue;
@@ -223,10 +341,9 @@ for ($page = 0; $page < $MAX_RSS_PAGES; $page++) {
         if ($link !== '' && strpos($link, 'http') !== 0) {
             $link = 'https://polizei.nrw' . (substr($link, 0, 1) === '/' ? '' : '/') . $link;
         }
-
         if ($link === '' || isset($seenUrls[$link])) continue;
-        $seenUrls[$link] = true;
 
+        $seenUrls[$link] = true;
         $dateRss = null;
         if ($pub) {
             $ts = strtotime($pub);
@@ -236,77 +353,87 @@ for ($page = 0; $page < $MAX_RSS_PAGES; $page++) {
         $articles[] = ["title" => $title, "url" => $link, "rssDate" => $dateRss];
         $newOnThisPage++;
         $totalFetched++;
-
         if ($totalFetched >= $TARGET_ITEMS) break;
     }
 
     echo "[INFO] RSS-Seite $page: neu gesammelt: $newOnThisPage, gesamt: $totalFetched\n";
-    if ($newOnThisPage === 0 || $totalFetched >= $TARGET_ITEMS) break;
-    usleep(300000); // 0,3s Pause
+    if ($newOnThisPage === 0) break;
+    usleep(300000);
 }
 
-/* --- 2) Falls zu wenig: HTML-Listenansicht mit ?page= nachladen --- */
+/* --- 2) AJAX „mehr Ergebnisse“: echte Views-AJAX Requests --- */
 if ($totalFetched < $TARGET_ITEMS) {
-    $opts = ["http" => ["header" => "User-Agent: razzia-map/1.0"]];
-    $ctx  = stream_context_create($opts);
+    $firstHtml = http_get($LIST_BASE);
+    if (!$firstHtml) {
+        echo "[WARN] Listen-HTML konnte nicht geladen werden: $LIST_BASE\n";
+    } else {
+        $ctx = extract_drupal_view_context($firstHtml);
+        if (!$ctx['view_name'] || !$ctx['view_display_id'] || !$ctx['view_dom_id']) {
+            echo "[WARN] Drupal-View-Context unvollständig – AJAX-Nachladen fällt aus.\n";
+        } else {
+            echo "[INFO] Drupal-View erkannt: {$ctx['view_name']} / {$ctx['view_display_id']} / dom_id={$ctx['view_dom_id']}\n";
+            for ($page = 1; $page <= $MAX_AJAX_PAGES && $totalFetched < $TARGET_ITEMS; $page++) {
+                $fields = [
+                    'view_name' => $ctx['view_name'],
+                    'view_display_id' => $ctx['view_display_id'],
+                    'view_args' => $ctx['view_args'],
+                    'view_path' => $ctx['view_path'],
+                    'view_base_path' => $ctx['view_base_path'],
+                    'view_dom_id' => $ctx['view_dom_id'],
+                    'pager_element' => (string)$ctx['pager_element'],
+                    'page' => (string)$page,
+                    // wichtige AJAX-Page-State Felder
+                    'ajax_page_state[theme]' => $ctx['ajax_theme'] ?? 'police',
+                    'ajax_page_state[libraries]' => $ctx['ajax_libraries'] ?? '',
+                ];
 
-    for ($page = 0; $page < $MAX_HTML_PAGES && $totalFetched < $TARGET_ITEMS; $page++) {
-        $listUrl = $LIST_BASE . ($page > 0 ? '?page=' . $page : '');
-        echo "[INFO] Lade HTML-Seite $page: $listUrl\n";
+                echo "[INFO] AJAX-Page $page POST an $AJAX_URL\n";
+                $resp = http_post_form($AJAX_URL, $fields);
+                if (!$resp) {
+                    echo "[WARN] AJAX-Antwort leer für page=$page\n";
+                    break;
+                }
 
-        $html = @file_get_contents($listUrl, false, $ctx);
-        if (!$html) {
-            echo "[WARN] HTML konnte nicht geladen werden: $listUrl\n";
-            continue;
-        }
+                $json = json_decode($resp, true);
+                if (!is_array($json)) {
+                    echo "[WARN] AJAX-JSON ungültig für page=$page\n";
+                    break;
+                }
 
-        $dom = new DOMDocument();
-        @$dom->loadHTML($html);
-        $xpath = new DOMXPath($dom);
+                // 'insert'-Kommandos einsammeln
+                $htmlCombined = '';
+                foreach ($json as $cmd) {
+                    if (isset($cmd['command']) && $cmd['command'] === 'insert' && !empty($cmd['data'])) {
+                        $htmlCombined .= $cmd['data'] . "\n";
+                    }
+                }
+                if ($htmlCombined === '') {
+                    echo "[INFO] Keine weiteren Einträge in AJAX page=$page\n";
+                    break;
+                }
 
-        // Titel-Links aus der Ergebnisliste
-        $nodes = $xpath->query("//div[contains(@class,'view-content')]//div[contains(@class,'views-row')]//h2[contains(@class,'field-title')]/a");
-        if (!$nodes || $nodes->length === 0) {
-            echo "[WARN] Keine Artikel-Links auf Seite $page gefunden\n";
-            if ($page > 0) break;
-            continue;
-        }
+                $pageItems = parse_list_items_from_html($htmlCombined);
+                $added = 0;
+                foreach ($pageItems as $it) {
+                    if (isset($seenUrls[$it['url']])) continue;
+                    $seenUrls[$it['url']] = true;
+                    $articles[] = $it;
+                    $added++;
+                    $totalFetched++;
+                    if ($totalFetched >= $TARGET_ITEMS) break;
+                }
+                echo "[INFO] AJAX-Seite $page: neu gesammelt: $added, gesamt: $totalFetched\n";
+                if ($added === 0) break;
 
-        $newOnThisPage = 0;
-        foreach ($nodes as $node) {
-            $title = trim($node->textContent);
-            $href  = $node->getAttribute('href');
-            $fullUrl = (strpos($href, 'http') === 0) ? $href : "https://polizei.nrw$href";
-
-            if (isset($seenUrls[$fullUrl])) continue;
-
-            // Veröffentlichungszeit in der Listenansicht (Sibling im gleichen Block)
-            $timeNode = $xpath->query("ancestor::div[contains(@class,'fields-wrapper')]//time", $node)->item(0);
-            $listDatetime = $timeNode ? $timeNode->getAttribute('datetime') : null;
-
-            $dateList = null;
-            if ($listDatetime && preg_match('/^(\d{4})-(\d{2})-(\d{2})/',$listDatetime,$m)) {
-                $dateList = "{$m[1]}-{$m[2]}-{$m[3]}";
+                usleep(300000);
             }
-
-            $seenUrls[$fullUrl] = true;
-            $articles[] = ["title" => $title, "url" => $fullUrl, "rssDate" => $dateList];
-            $newOnThisPage++;
-            $totalFetched++;
-
-            if ($totalFetched >= $TARGET_ITEMS) break;
         }
-
-        echo "[INFO] HTML-Seite $page: neu gesammelt: $newOnThisPage, gesamt: $totalFetched\n";
-        if ($newOnThisPage === 0) break;
-
-        usleep(300000); // 0,3s Pause zwischen Seiten
     }
 }
 
 $relevantCount = 0;
 
-/* ----------------- Verarbeitung der Artikel ----------------- */
+/* ----------------- Verarbeitung ----------------- */
 
 foreach ($articles as $article) {
     if (urlExistsInDatabase($article["url"])) {
@@ -314,7 +441,7 @@ foreach ($articles as $article) {
         continue;
     }
 
-    $contentHtml = @file_get_contents($article["url"]);
+    $contentHtml = http_get($article["url"]);
     if (!$contentHtml) {
         echo "[WARN] Artikel konnte nicht geladen werden: {$article['url']}\n";
         continue;
@@ -324,15 +451,12 @@ foreach ($articles as $article) {
     @$dom2->loadHTML($contentHtml);
     $xpath2 = new DOMXPath($dom2);
 
-    // Absätze im Artikeltext (robust für Drupal 10)
     $paragraphs = $xpath2->query(
         "(//main//div[contains(@class,'node__content')]//p)
          | (//main//div[contains(@class,'field')][contains(@class,'body') or contains(@class,'text')]//p)
          | (//div[contains(@class,'article')]//p)"
     );
-    if ($paragraphs->length === 0) {
-        $paragraphs = $xpath2->query("//p");
-    }
+    if ($paragraphs->length === 0) $paragraphs = $xpath2->query("//p");
     if ($paragraphs->length === 0) {
         echo "[WARN] Kein Artikeltext gefunden für: {$article['title']}\n";
         continue;
@@ -341,9 +465,7 @@ foreach ($articles as $article) {
     $contentText = "";
     foreach ($paragraphs as $p) {
         $line = trim($p->textContent);
-        if (preg_match('/^(hinweise erbeten|mehr zum thema|kontakt|impressum|datenschutzerkl|teilen:)/i', $line)) {
-            break;
-        }
+        if (preg_match('/^(hinweise erbeten|mehr zum thema|kontakt|impressum|datenschutzerkl|teilen:)/i', $line)) break;
         $contentText .= $line . "\n";
     }
 
@@ -362,7 +484,6 @@ foreach ($articles as $article) {
         continue;
     }
 
-    // GPT-Metadaten extrahieren
     $gptResult = extractMetadataWithGPT($contentText);
     if (!$gptResult || !is_array($gptResult) || ($gptResult['illegal'] ?? false) !== true) {
         echo "[INFO] Kein Fall von illegalem Glücksspiel – Artikel verworfen: {$article['title']} | {$article['url']}\n";
@@ -379,14 +500,12 @@ foreach ($articles as $article) {
     echo "[GPT] Typ erkannt: $type\n";
     if ($gptLat && $gptLon) echo "[GPT] Koordinaten erkannt: $gptLat, $gptLon\n";
 
-    // Fallback-Ort
     $location = $gptOrt ?: extractLocation($contentText);
     if (!$location) echo "[WARN] Kein Ort durch GPT oder Fallback-Logik gefunden\n";
 
     $lat = $gptLat;
     $lon = $gptLon;
 
-    // Fallback Geocoding
     if (!$lat || !$lon) {
         if ($location) {
             list($lat, $lon) = geocodeLocation($location);
@@ -398,14 +517,12 @@ foreach ($articles as $article) {
         }
     }
 
-    // Bundesland ggf. aus Koordinaten ableiten
     if (!$federal && $lat && $lon) {
         $federal = getFederalState($lat, $lon);
         if ($federal) echo "[INFO] Bundesland (Koordinaten-Fallback): $federal\n";
     }
     if ($federal) echo "[INFO] Bundesland: $federal\n";
 
-    // Veröffentlichungsdatum: <time datetime> bevorzugt, sonst RSS/List-Fallback
     $date = null;
     $dateNode = $xpath2->query("//time[@datetime]")->item(0);
     if ($dateNode) {
@@ -442,7 +559,7 @@ foreach ($articles as $article) {
     saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"], $federal, $type);
     $relevantCount++;
 
-    usleep(300000); // 0,3s Throttle pro Artikel
+    usleep(300000);
 }
 
 echo "[INFO] Gesamt verarbeitete Artikel mit passendem Keyword: $relevantCount\n";

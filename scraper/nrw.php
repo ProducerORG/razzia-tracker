@@ -5,195 +5,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/../');
 $dotenv->load();
 
-// Konfiguration aus .env
-$KEYWORDS = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
-$SUPABASE_URL = $_ENV['SUPABASE_URL'] ?? '';
-$SUPABASE_KEY = $_ENV['SUPABASE_KEY'] ?? '';
-
-$RSS_URL  = 'https://polizei.nrw/presse/pressemitteilungen/rss/all/all/all/all';
-echo "[INFO] RSS-URL: $RSS_URL\n";
-echo "[INFO] Schlüsselwörter: " . implode(', ', $KEYWORDS) . "\n";
-
-// --- RSS laden (liefert ~50 Einträge) ---
-libxml_use_internal_errors(true);
-$rssXml = @file_get_contents($RSS_URL);
-if (!$rssXml) {
-    echo "[ERROR] RSS konnte nicht geladen werden.\n";
-    exit(1);
-}
-$xml = @simplexml_load_string($rssXml);
-if (!$xml || !isset($xml->channel->item)) {
-    echo "[ERROR] RSS Parsing fehlgeschlagen oder keine Einträge.\n";
-    exit(1);
-}
-
-$articles = [];
-$seenUrls = [];
-$relevantCount = 0;
-
-// RSS-Items extrahieren
-foreach ($xml->channel->item as $item) {
-    $title = trim((string)$item->title);
-    $link  = trim((string)$item->link);
-    $pub   = trim((string)$item->pubDate);
-
-    if ($link === '' || isset($seenUrls[$link])) continue;
-    $seenUrls[$link] = true;
-
-    // pubDate in YYYY-MM-DD extrahieren (Fallback, endgültig versuchen wir später aus <time>)
-    $dateRss = null;
-    if ($pub) {
-        $ts = strtotime($pub);
-        if ($ts !== false) {
-            $dateRss = gmdate('Y-m-d', $ts);
-        }
-    }
-
-    $articles[] = ["title" => $title, "url" => $link, "rssDate" => $dateRss];
-}
-
-// Artikel verarbeiten
-foreach ($articles as $article) {
-    if (urlExistsInDatabase($article["url"])) {
-        echo "[INFO] Artikel bereits in Datenbank, übersprungen: {$article['url']}\n";
-        continue;
-    }
-
-    $contentHtml = @file_get_contents($article["url"]);
-    if (!$contentHtml) {
-        echo "[WARN] Artikel konnte nicht geladen werden: {$article['url']}\n";
-        continue;
-    }
-
-    $dom2 = new DOMDocument();
-    @$dom2->loadHTML($contentHtml);
-    $xpath2 = new DOMXPath($dom2);
-
-    // Absätze im Artikeltext (robuste Auswahl für Drupal 10)
-    $paragraphs = $xpath2->query(
-        "(//main//div[contains(@class,'node__content')]//p)
-         | (//main//div[contains(@class,'field')][contains(@class,'body') or contains(@class,'text')]//p)
-         | (//div[contains(@class,'article')]//p)"
-    );
-    if ($paragraphs->length === 0) {
-        $paragraphs = $xpath2->query("//p");
-    }
-    if ($paragraphs->length === 0) {
-        echo "[WARN] Kein Artikeltext gefunden für: {$article['title']}\n";
-        continue;
-    }
-
-    $contentText = "";
-    foreach ($paragraphs as $p) {
-        $line = trim($p->textContent);
-        // Footer/Banner/Meta vermeiden
-        if (preg_match('/^(hinweise erbeten|mehr zum thema|kontakt|impressum|datenschutzerkl|teilen:)/i', $line)) {
-            break;
-        }
-        $contentText .= $line . "\n";
-    }
-
-    $found = false;
-    $kw = null;
-    foreach ($KEYWORDS as $kwCandidate) {
-        if (preg_match('/\b' . preg_quote($kwCandidate, '/') . '\b/i', $contentText)) {
-            $found = true;
-            $kw = $kwCandidate;
-            echo "[DEBUG] Schlüsselwort gefunden: $kw\n";
-            break;
-        }
-    }
-    if (!$found) {
-        echo "[INFO] Kein relevantes Schlüsselwort gefunden, Artikel übersprungen.\n";
-        continue;
-    }
-
-    // GPT-Metadaten extrahieren
-    $gptResult = extractMetadataWithGPT($contentText);
-    if (!$gptResult || !is_array($gptResult) || ($gptResult['illegal'] ?? false) !== true) {
-        echo "[INFO] Kein Fall von illegalem Glücksspiel – Artikel verworfen\n";
-        continue;
-    }
-
-    $type   = $gptResult['typ'] ?? "Sonstige";
-    $gptOrt = $gptResult['ort'] ?? null;
-    $gptLat = $gptResult['koord']['lat'] ?? null;
-    $gptLon = $gptResult['koord']['lon'] ?? null;
-    $federal = $gptResult['bundesland'] ?? null;
-
-    if ($gptOrt) echo "[GPT] Ort erkannt: $gptOrt\n";
-    echo "[GPT] Typ erkannt: $type\n";
-    if ($gptLat && $gptLon) echo "[GPT] Koordinaten erkannt: $gptLat, $gptLon\n";
-
-    // Fallback-Ort
-    $location = $gptOrt ?: extractLocation($contentText);
-    if (!$location) echo "[WARN] Kein Ort durch GPT oder Fallback-Logik gefunden\n";
-
-    $lat = $gptLat;
-    $lon = $gptLon;
-
-    // Fallback Geocoding
-    if (!$lat || !$lon) {
-        if ($location) {
-            list($lat, $lon) = geocodeLocation($location);
-            if ($lat && $lon) {
-                echo "[INFO] Fallback-Koordinaten ermittelt: $lat, $lon\n";
-            } else {
-                echo "[WARN] Fallback-Geocoding fehlgeschlagen\n";
-            }
-        }
-    }
-
-    // Bundesland ggf. aus Koordinaten ableiten
-    if (!$federal && $lat && $lon) {
-        $federal = getFederalState($lat, $lon);
-        if ($federal) echo "[INFO] Bundesland (Koordinaten-Fallback): $federal\n";
-    }
-    if ($federal) echo "[INFO] Bundesland: $federal\n";
-
-    // Veröffentlichungsdatum: zuerst <time datetime> aus Artikelseite, sonst RSS
-    $date = null;
-    $dateNode = $xpath2->query("//time[@datetime]")->item(0);
-    if ($dateNode) {
-        $datetimeAttr = $dateNode->getAttribute("datetime"); // z.B. 2025-08-08T14:22:33+02:00
-        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/',$datetimeAttr,$m)) {
-            $date = "{$m[1]}-{$m[2]}-{$m[3]}";
-            echo "[DEBUG] Veröffentlichungsdatum (Artikel): $date\n";
-        }
-    }
-    if (!$date && !empty($article['rssDate'])) {
-        $date = $article['rssDate'];
-        echo "[DEBUG] Veröffentlichungsdatum (RSS/Fallback): $date\n";
-    }
-    if (!$date) {
-        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
-        $date = gmdate("Y-m-d");
-    }
-
-    $summary = buildSummary($paragraphs);
-
-    echo "[DEBUG] Speichere Artikel mit Keyword: $kw\n";
-    echo "[DEBUG] Titel: {$article['title']}\n";
-    echo "[DEBUG] URL: {$article['url']}\n";
-    $lowerText = mb_strtolower($contentText);
-    $pos = $kw ? mb_strpos($lowerText, mb_strtolower($kw)) : false;
-    if ($pos !== false) {
-        $start = max(0, $pos - 20);
-        $snippet = mb_substr($contentText, $start, 60);
-        echo "[DEBUG] Kontext des Schlüsselwortes: $snippet\n";
-    } else {
-        echo "[DEBUG] Kein Kontext des Schlüsselwortes\n";
-    }
-
-    saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"], $federal, $type);
-    $relevantCount++;
-
-    usleep(300000); // 0,3s Throttle pro Artikel
-}
-
-echo "[INFO] Gesamt verarbeitete Artikel mit passendem Keyword: $relevantCount\n";
-
-/* ----------------- Hilfsfunktionen (mit Guards, um Doppeldefinitionen zu vermeiden) ----------------- */
+/* ----------------- Hilfsfunktionen ZUERST definieren (mit Guards) ----------------- */
 
 if (!function_exists('extractLocation')) {
 function extractLocation($text) {
@@ -224,7 +36,9 @@ function geocodeLocation($location) {
 
 if (!function_exists('saveToSupabase')) {
 function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url, $federal, $type) {
-    global $SUPABASE_URL, $SUPABASE_KEY;
+    $SUPABASE_URL = $_ENV['SUPABASE_URL'] ?? '';
+    $SUPABASE_KEY = $_ENV['SUPABASE_KEY'] ?? '';
+
     $apiUrl = $SUPABASE_URL . "/rest/v1/raids";
     $data = json_encode([
         "title" => $title,
@@ -292,7 +106,9 @@ function getFederalState($lat, $lon) {
 
 if (!function_exists('extractMetadataWithGPT')) {
 function extractMetadataWithGPT($text) {
-    $apiKey = $_ENV['OPENAI_API_KEY'];
+    $apiKey = $_ENV['OPENAI_API_KEY'] ?? '';
+    if (!$apiKey) return null;
+
     $url = 'https://api.openai.com/v1/chat/completions';
     $prompt = "Analysiere den folgenden Nachrichtentext. Gib das Ergebnis als JSON zurück mit den Feldern:
 - 'ort': Der Ort, wo der Vorfall stattgefunden hat. Gib ausschließlich den Ortsnamen zurück, ohne Zusätze wie 'in', 'bei' oder 'nahe'.
@@ -302,6 +118,7 @@ function extractMetadataWithGPT($text) {
 - 'illegal': true oder false. Gib 'true' zurück, **wenn es sich eindeutig um illegales Glücksspiel handelt**. Gib 'false' zurück, **wenn es um andere Vorfälle wie Diebstahl, Einbruch, Überfall, Geldwäsche, oder Straftaten im Umfeld legaler Glücksspiele geht.**
 
 Text:\n" . mb_substr($text, 0, 2000);
+
     $data = [
         "model" => "gpt-4",
         "messages" => [
@@ -331,7 +148,9 @@ Text:\n" . mb_substr($text, 0, 2000);
 
 if (!function_exists('urlExistsInDatabase')) {
 function urlExistsInDatabase($url) {
-    global $SUPABASE_URL, $SUPABASE_KEY;
+    $SUPABASE_URL = $_ENV['SUPABASE_URL'] ?? '';
+    $SUPABASE_KEY = $_ENV['SUPABASE_KEY'] ?? '';
+
     $queryUrl = $SUPABASE_URL . "/rest/v1/raids?url=eq." . urlencode($url) . "&select=url&limit=1";
     $headers = [
         "apikey: $SUPABASE_KEY",
@@ -353,3 +172,189 @@ function urlExistsInDatabase($url) {
     return !empty($data);
 }
 }
+
+/* ----------------- Hauptlogik ----------------- */
+
+// Konfiguration aus .env
+$KEYWORDS = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
+
+$RSS_URL  = 'https://polizei.nrw/presse/pressemitteilungen/rss/all/all/all/all';
+echo "[INFO] RSS-URL: $RSS_URL\n";
+echo "[INFO] Schlüsselwörter: " . implode(', ', $KEYWORDS) . "\n";
+
+// RSS laden (~50 Einträge)
+libxml_use_internal_errors(true);
+$rssXml = @file_get_contents($RSS_URL);
+if (!$rssXml) {
+    echo "[ERROR] RSS konnte nicht geladen werden.\n";
+    exit(1);
+}
+$xml = @simplexml_load_string($rssXml);
+if (!$xml || !isset($xml->channel->item)) {
+    echo "[ERROR] RSS Parsing fehlgeschlagen oder keine Einträge.\n";
+    exit(1);
+}
+
+$articles = [];
+$seenUrls = [];
+$relevantCount = 0;
+
+// RSS-Items extrahieren
+foreach ($xml->channel->item as $item) {
+    $title = trim((string)$item->title);
+    $link  = trim((string)$item->link);
+    $pub   = trim((string)$item->pubDate);
+
+    if ($link === '' || isset($seenUrls[$link])) continue;
+    $seenUrls[$link] = true;
+
+    // pubDate -> YYYY-MM-DD (Fallback)
+    $dateRss = null;
+    if ($pub) {
+        $ts = strtotime($pub);
+        if ($ts !== false) {
+            $dateRss = gmdate('Y-m-d', $ts);
+        }
+    }
+    $articles[] = ["title" => $title, "url" => $link, "rssDate" => $dateRss];
+}
+
+// Artikel verarbeiten
+foreach ($articles as $article) {
+    if (urlExistsInDatabase($article["url"])) {
+        echo "[INFO] Artikel bereits in Datenbank, übersprungen: {$article['url']}\n";
+        continue;
+    }
+
+    $contentHtml = @file_get_contents($article["url"]);
+    if (!$contentHtml) {
+        echo "[WARN] Artikel konnte nicht geladen werden: {$article['url']}\n";
+        continue;
+    }
+
+    $dom2 = new DOMDocument();
+    @$dom2->loadHTML($contentHtml);
+    $xpath2 = new DOMXPath($dom2);
+
+    // Absätze im Artikeltext (robust für Drupal 10)
+    $paragraphs = $xpath2->query(
+        "(//main//div[contains(@class,'node__content')]//p)
+         | (//main//div[contains(@class,'field')][contains(@class,'body') or contains(@class,'text')]//p)
+         | (//div[contains(@class,'article')]//p)"
+    );
+    if ($paragraphs->length === 0) {
+        $paragraphs = $xpath2->query("//p");
+    }
+    if ($paragraphs->length === 0) {
+        echo "[WARN] Kein Artikeltext gefunden für: {$article['title']}\n";
+        continue;
+    }
+
+    $contentText = "";
+    foreach ($paragraphs as $p) {
+        $line = trim($p->textContent);
+        if (preg_match('/^(hinweise erbeten|mehr zum thema|kontakt|impressum|datenschutzerkl|teilen:)/i', $line)) {
+            break;
+        }
+        $contentText .= $line . "\n";
+    }
+
+    $found = false;
+    $kw = null;
+    foreach ($KEYWORDS as $kwCandidate) {
+        if (preg_match('/\b' . preg_quote($kwCandidate, '/') . '\b/i', $contentText)) {
+            $found = true;
+            $kw = $kwCandidate;
+            echo "[DEBUG] Schlüsselwort gefunden: $kw\n";
+            break;
+        }
+    }
+    if (!$found) {
+        echo "[INFO] Kein relevantes Schlüsselwort gefunden, Artikel übersprungen.\n";
+        continue;
+    }
+
+    // GPT-Metadaten extrahieren
+    $gptResult = extractMetadataWithGPT($contentText);
+    if (!$gptResult || !is_array($gptResult) || ($gptResult['illegal'] ?? false) !== true) {
+        echo "[INFO] Kein Fall von illegalem Glücksspiel – Artikel verworfen\n";
+        continue;
+    }
+
+    $type   = $gptResult['typ'] ?? "Sonstige";
+    $gptOrt = $gptResult['ort'] ?? null;
+    $gptLat = $gptResult['koord']['lat'] ?? null;
+    $gptLon = $gptResult['koord']['lon'] ?? null;
+    $federal = $gptResult['bundesland'] ?? null;
+
+    if ($gptOrt) echo "[GPT] Ort erkannt: $gptOrt\n";
+    echo "[GPT] Typ erkannt: $type\n";
+    if ($gptLat && $gptLon) echo "[GPT] Koordinaten erkannt: $gptLat, $gptLon\n";
+
+    // Fallback-Ort
+    $location = $gptOrt ?: extractLocation($contentText);
+    if (!$location) echo "[WARN] Kein Ort durch GPT oder Fallback-Logik gefunden\n";
+
+    $lat = $gptLat;
+    $lon = $gptLon;
+
+    // Fallback Geocoding
+    if (!$lat || !$lon) {
+        if ($location) {
+            list($lat, $lon) = geocodeLocation($location);
+            if ($lat && $lon) {
+                echo "[INFO] Fallback-Koordinaten ermittelt: $lat, $lon\n";
+            } else {
+                echo "[WARN] Fallback-Geocoding fehlgeschlagen\n";
+            }
+        }
+    }
+
+    // Bundesland ggf. aus Koordinaten ableiten
+    if (!$federal && $lat && $lon) {
+        $federal = getFederalState($lat, $lon);
+        if ($federal) echo "[INFO] Bundesland (Koordinaten-Fallback): $federal\n";
+    }
+    if ($federal) echo "[INFO] Bundesland: $federal\n";
+
+    // Veröffentlichungsdatum: <time datetime> bevorzugt, sonst RSS
+    $date = null;
+    $dateNode = $xpath2->query("//time[@datetime]")->item(0);
+    if ($dateNode) {
+        $datetimeAttr = $dateNode->getAttribute("datetime");
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/',$datetimeAttr,$m)) {
+            $date = "{$m[1]}-{$m[2]}-{$m[3]}";
+            echo "[DEBUG] Veröffentlichungsdatum (Artikel): $date\n";
+        }
+    }
+    if (!$date && !empty($article['rssDate'])) {
+        $date = $article['rssDate'];
+        echo "[DEBUG] Veröffentlichungsdatum (RSS/Fallback): $date\n";
+    }
+    if (!$date) {
+        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
+        $date = gmdate("Y-m-d");
+    }
+
+    $summary = buildSummary($paragraphs);
+
+    echo "[DEBUG] Speichere Artikel mit Keyword: $kw\n";
+    echo "[DEBUG] Titel: {$article['title']}\n";
+    echo "[DEBUG] URL: {$article['url']}\n";
+    $lowerText = mb_strtolower($contentText);
+    $pos = $kw ? mb_strpos($lowerText, mb_strtolower($kw)) : false;
+    if ($pos !== false) {
+        $start = max(0, $pos - 20);
+        $snippet = mb_substr($contentText, $start, 60);
+        echo "[DEBUG] Kontext des Schlüsselwortes: $snippet\n";
+    } else {
+        echo "[DEBUG] Kein Kontext des Schlüsselwortes\n";
+    }
+
+    saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"], $federal, $type);
+    $relevantCount++;
+
+    usleep(300000); // 0,3s Throttle pro Artikel
+}
+
+echo "[INFO] Gesamt verarbeitete Artikel mit passendem Keyword: $relevantCount\n";

@@ -124,7 +124,7 @@ Text:\n" . mb_substr($text, 0, 2000);
         "messages" => [
             ["role" => "user", "content" => $prompt]
         ],
-        "temperature" => 0.1
+        "temperature": 0.1
     ];
     $headers = [
         "Authorization: Bearer $apiKey",
@@ -178,46 +178,70 @@ function urlExistsInDatabase($url) {
 // Konfiguration aus .env
 $KEYWORDS = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
 
-$RSS_URL  = 'https://polizei.nrw/presse/pressemitteilungen/rss/all/all/all/all';
-echo "[INFO] RSS-URL: $RSS_URL\n";
+$RSS_BASE = 'https://polizei.nrw/presse/pressemitteilungen/rss/all/all/all/all';
+echo "[INFO] RSS-URL: $RSS_BASE\n";
 echo "[INFO] Schlüsselwörter: " . implode(', ', $KEYWORDS) . "\n";
 
-// RSS laden (~50 Einträge)
-libxml_use_internal_errors(true);
-$rssXml = @file_get_contents($RSS_URL);
-if (!$rssXml) {
-    echo "[ERROR] RSS konnte nicht geladen werden.\n";
-    exit(1);
-}
-$xml = @simplexml_load_string($rssXml);
-if (!$xml || !isset($xml->channel->item)) {
-    echo "[ERROR] RSS Parsing fehlgeschlagen oder keine Einträge.\n";
-    exit(1);
-}
-
+// Wie viele RSS-Seiten holen? page=0 ist die erste. Pro Seite ~25 Items.
+$MAX_RSS_PAGES = 4; // ergibt ca. bis zu ~100 Items
 $articles = [];
 $seenUrls = [];
-$relevantCount = 0;
+$totalFetched = 0;
 
-// RSS-Items extrahieren
-foreach ($xml->channel->item as $item) {
-    $title = trim((string)$item->title);
-    $link  = trim((string)$item->link);
-    $pub   = trim((string)$item->pubDate);
+libxml_use_internal_errors(true);
 
-    if ($link === '' || isset($seenUrls[$link])) continue;
-    $seenUrls[$link] = true;
+for ($page = 0; $page < $MAX_RSS_PAGES; $page++) {
+    $rssUrl = $RSS_BASE . ($page > 0 ? '?page=' . $page : '');
+    echo "[INFO] Lade RSS-Seite $page: $rssUrl\n";
 
-    // pubDate -> YYYY-MM-DD (Fallback)
-    $dateRss = null;
-    if ($pub) {
-        $ts = strtotime($pub);
-        if ($ts !== false) {
-            $dateRss = gmdate('Y-m-d', $ts);
-        }
+    $rssXml = @file_get_contents($rssUrl);
+    if (!$rssXml) {
+        echo "[WARN] RSS konnte nicht geladen werden: $rssUrl\n";
+        continue;
     }
-    $articles[] = ["title" => $title, "url" => $link, "rssDate" => $dateRss];
+    $xml = @simplexml_load_string($rssXml);
+    if (!$xml || !isset($xml->channel->item)) {
+        echo "[WARN] Keine Items auf RSS-Seite $page\n";
+        // Früh abbrechen, wenn ab Seite>0 nichts mehr kommt
+        if ($page > 0) break;
+        continue;
+    }
+
+    $newOnThisPage = 0;
+
+    foreach ($xml->channel->item as $item) {
+        $title = trim((string)$item->title);
+        $link  = trim((string)$item->link);
+        $pub   = trim((string)$item->pubDate);
+
+        // absolute URL erzwingen
+        if ($link !== '' && strpos($link, 'http') !== 0) {
+            $link = 'https://polizei.nrw' . (substr($link, 0, 1) === '/' ? '' : '/') . $link;
+        }
+
+        if ($link === '' || isset($seenUrls[$link])) continue;
+        $seenUrls[$link] = true;
+
+        $dateRss = null;
+        if ($pub) {
+            $ts = strtotime($pub);
+            if ($ts !== false) $dateRss = gmdate('Y-m-d', $ts);
+        }
+
+        $articles[] = ["title" => $title, "url" => $link, "rssDate" => $dateRss];
+        $newOnThisPage++;
+        $totalFetched++;
+    }
+
+    echo "[INFO] RSS-Seite $page: neu gesammelt: $newOnThisPage, gesamt: $totalFetched\n";
+
+    // Wenn keine neuen Items mehr geliefert werden, Abbruch.
+    if ($newOnThisPage === 0) break;
+
+    usleep(300000); // 0,3s Pause zwischen RSS-Requests
 }
+
+$relevantCount = 0;
 
 // Artikel verarbeiten
 foreach ($articles as $article) {

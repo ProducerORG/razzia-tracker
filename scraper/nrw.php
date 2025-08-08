@@ -124,7 +124,7 @@ Text:\n" . mb_substr($text, 0, 2000);
         "messages" => [
             ["role" => "user", "content" => $prompt]
         ],
-        "temperature": 0.1
+        "temperature" => 0.1
     ];
     $headers = [
         "Authorization: Bearer $apiKey",

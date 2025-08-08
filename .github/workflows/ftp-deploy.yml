@@ -29,3 +29,14 @@ jobs:
           exclude: |
             **/.git*
             **/.github*
+
+      - name: Install lftp
+        run: sudo apt-get update && sudo apt-get install -y lftp
+
+      - name: Set permissions for /scraper/scraper.php via FTP (lftp)
+        run: |
+          lftp -u ${{ secrets.FTP_USER }},${{ secrets.FTP_PASSWORD }} -p ${{ secrets.FTP_PORT }} ${{ secrets.FTP_HOST }} << EOF
+          set ftp:ssl-allow no
+          chmod 744 /scraper/scraper.php
+          bye
+          EOF

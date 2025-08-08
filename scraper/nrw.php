@@ -270,14 +270,14 @@ foreach ($articles as $article) {
         }
     }
     if (!$found) {
-        echo "[INFO] Kein relevantes Schlüsselwort gefunden, Artikel übersprungen.\n";
+        echo "[INFO] Kein relevantes Schlüsselwort gefunden, übersprungen: {$article['title']} | {$article['url']}\n";
         continue;
     }
 
     // GPT-Metadaten extrahieren
     $gptResult = extractMetadataWithGPT($contentText);
     if (!$gptResult || !is_array($gptResult) || ($gptResult['illegal'] ?? false) !== true) {
-        echo "[INFO] Kein Fall von illegalem Glücksspiel – Artikel verworfen\n";
+        echo "[INFO] Kein Fall von illegalem Glücksspiel – Artikel verworfen: {$article['title']} | {$article['url']}\n";
         continue;
     }
 

@@ -6,7 +6,7 @@ $files = array_values(array_filter(scandir($dir), function($f) {
     return substr($f, -4) === '.php' && $f !== 'scraper.php';
 }));
 
-// Optional: feste Reihenfolge (erst presseportal.php, dann der Rest)
+// Optional: feste Reihenfolge (erst presseportal.php, dann der Rest) 
 usort($files, function($a, $b) {
     if ($a === 'presseportal.php') return -1;
     if ($b === 'presseportal.php') return 1;

@@ -1,8 +1,7 @@
 <?php
 
 // scraper/schleswig-holstein.php
-// Funktioniert analog zu presseportal.php, wertet aber https://www.shz.de/lokales/blaulicht-sh aus
-// und lädt zusätzlich 2–3x „Weitere Inhalte laden“.
+// SHZ-Blaulicht (https://www.shz.de/lokales/blaulicht-sh) mit robustem Nachladen + RSS-Fallback
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
@@ -24,59 +23,223 @@ $articles = [];
 $seenUrls = [];
 $relevantCount = 0;
 
-// User-Agent für Fetches (einige Endpunkte verlangen einen UA)
-$httpCtx = stream_context_create([
-    'http' => [
-        'header' => "User-Agent: razzia-map/1.0\r\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        'timeout' => 20
-    ]
-]);
-
-// 1) Basisseite laden und Teaser sammeln
-echo "[INFO] Lade Basisseite\n";
-$baseHtml = @file_get_contents($NEWS_URL, false, $httpCtx);
-if ($baseHtml) {
-    list($newTeasers, $nextAjaxUrl) = parseShzListingPage($baseHtml, $NEWS_URL);
-    foreach ($newTeasers as $t) {
-        if (isset($seenUrls[$t['url']])) continue;
-        $seenUrls[$t['url']] = true;
-        $articles[] = $t;
+// ---------- HTTP ----------
+function http_fetch($url, $isAjax = false, $referer = null) {
+    $ch = curl_init();
+    $headers = [
+        'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language: de-DE,de;q=0.9,en;q=0.7',
+        'User-Agent: razzia-map/1.0 (+https://example.invalid)',
+        'Cache-Control: no-cache',
+        'Pragma: no-cache',
+    ];
+    if ($isAjax) {
+        $headers[] = 'X-Requested-With: XMLHttpRequest';
     }
-} else {
-    echo "[WARN] Basisseite konnte nicht geladen werden\n";
-    $nextAjaxUrl = null;
+    curl_setopt_array($ch, [
+        CURLOPT_URL => $url,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_CONNECTTIMEOUT => 15,
+        CURLOPT_TIMEOUT => 25,
+        CURLOPT_ENCODING => '', // gzip/deflate
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
+    ]);
+    if ($referer) {
+        curl_setopt($ch, CURLOPT_REFERER, $referer);
+    }
+    $html = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    if (curl_errno($ch)) {
+        echo "[WARN] CURL ".curl_errno($ch).": ".curl_error($ch)." @ $url\n";
+    } elseif ($httpCode >= 400) {
+        echo "[WARN] HTTP $httpCode @ $url\n";
+    }
+    curl_close($ch);
+    return $html ?: '';
 }
 
-// 2) „Weitere Inhalte laden“ 2–3x simulieren (AJAX-Endpunkt)
-$maxLoads = 3;
-$loadNum = 0;
+// ---------- Parsen Auflistung ----------
+function parseShzListingPage($html) {
+    // Liefert: [ items[], nextAjaxUrl, rssUrl ]
+    $dom = new DOMDocument();
+    @$dom->loadHTML($html);
+    $xpath = new DOMXPath($dom);
 
-while ($nextAjaxUrl && $loadNum < $maxLoads) {
-    $loadNum++;
-    echo "[INFO] Lade weitere Inhalte ($loadNum): $nextAjaxUrl\n";
-    $ajaxHtml = @file_get_contents($nextAjaxUrl, false, $httpCtx);
-    if (!$ajaxHtml) {
-        echo "[WARN] AJAX-Chunk konnte nicht geladen werden\n";
-        break;
+    $items = [];
+
+    // 1) Robuste Teaser-Suche:
+    //    - Container mit data-article-id ODER class article__teaser
+    //    - Links zu /artikel/
+    $containers = $xpath->query("//*[(@data-article-id) or contains(@class,'article__teaser')]");
+    $picked = 0;
+    foreach ($containers as $c) {
+        $a = null;
+        // bevorzugt Text-Link
+        $aList = (new DOMXPath($c->ownerDocument))->query(".//a[contains(@href,'/artikel/')]", $c);
+        if ($aList->length > 0) $a = $aList->item(0);
+        if (!$a) continue;
+        $href = trim($a->getAttribute('href'));
+        if ($href === '' || strpos($href, '/video/') !== false) continue;
+        $full = (strpos($href, 'http') === 0) ? $href : 'https://www.shz.de' . (strpos($href,'/')===0 ? $href : '/'.$href);
+
+        // Titel aus h3 im Container oder Text des Links
+        $h3 = (new DOMXPath($c->ownerDocument))->query(".//h3", $c);
+        $title = $h3->length ? trim($h3->item(0)->textContent) : trim($a->textContent);
+        if ($title === '') $title = "Ohne Titel";
+
+        $items[] = ['title' => $title, 'url' => $full];
+        $picked++;
     }
 
-    list($newTeasers, $updatedAjaxUrl) = parseShzListingPage($ajaxHtml, $NEWS_URL);
-    $added = 0;
-    foreach ($newTeasers as $t) {
-        if (isset($seenUrls[$t['url']])) continue;
+    // 2) Fallback: grobe Suche nach /lokales/.../artikel/
+    if ($picked === 0) {
+        $aAll = $xpath->query("//a[contains(@href,'/lokales/') and contains(@href,'/artikel/')]");
+        foreach ($aAll as $a) {
+            $href = trim($a->getAttribute('href'));
+            if ($href === '' || strpos($href, '/video/') !== false) continue;
+            $full = (strpos($href, 'http') === 0) ? $href : 'https://www.shz.de' . (strpos($href,'/')===0 ? $href : '/'.$href);
+            $title = trim($a->textContent);
+            if ($title === '') $title = "Ohne Titel";
+            $items[] = ['title' => $title, 'url' => $full];
+        }
+        $picked = count($items);
+    }
+
+    echo "[INFO] Teaser auf Seite/Chunk: $picked\n";
+
+    // 3) Nächste AJAX-URL (falls Button vorhanden)
+    $btn = $xpath->query("//button[contains(@class,'button-reload') and @data-url]");
+    $nextAjaxUrl = null;
+    if ($btn->length > 0) {
+        $dataUrl = $btn->item(0)->getAttribute('data-url');
+        if ($dataUrl) {
+            $nextAjaxUrl = (strpos($dataUrl, 'http') === 0) ? $dataUrl : 'https://www.shz.de' . (strpos($dataUrl,'/')===0 ? $dataUrl : '/'.$dataUrl);
+        }
+    }
+
+    // 4) RSS-Link extrahieren (für sicheren Fallback)
+    $rss = $xpath->query("//meta[@name='feed']/@content");
+    $rssUrl = $rss->length ? trim($rss->item(0)->nodeValue) : null;
+
+    return [$items, $nextAjaxUrl, $rssUrl];
+}
+
+// Falls der AJAX-Response JSON mit HTML-Fragment liefert
+function extractHtmlFromMaybeJson($payload) {
+    $trim = ltrim($payload);
+    if ($trim === '' ) return '';
+    if ($trim[0] !== '{' && $trim[0] !== '[') return $payload;
+
+    $json = json_decode($payload, true);
+    if (!is_array($json)) return $payload;
+    // Häufige Felder, die HTML enthalten könnten
+    foreach (['html','content','data','body'] as $k) {
+        if (isset($json[$k]) && is_string($json[$k])) return $json[$k];
+    }
+    // manchmal Array von Chunks
+    foreach ($json as $v) {
+        if (is_array($v)) {
+            foreach (['html','content','data','body'] as $k) {
+                if (isset($v[$k]) && is_string($v[$k])) return $v[$k];
+            }
+        }
+    }
+    return $payload;
+}
+
+// ---------- RSS-Fallback ----------
+function fetchFromRss($rssUrl) {
+    if (!$rssUrl) return [];
+    echo "[INFO] Lese RSS: $rssUrl\n";
+    $xml = http_fetch($rssUrl, false, $rssUrl);
+    if (!$xml) {
+        echo "[WARN] RSS konnte nicht geladen werden\n";
+        return [];
+    }
+    $items = [];
+    libxml_use_internal_errors(true);
+    $doc = new DOMDocument();
+    if (@$doc->loadXML($xml)) {
+        $xpath = new DOMXPath($doc);
+        foreach ($xpath->query("//item") as $item) {
+            $linkNode  = $xpath->query(".//link", $item)->item(0);
+            $titleNode = $xpath->query(".//title", $item)->item(0);
+            if (!$linkNode) continue;
+            $u = trim($linkNode->textContent);
+            if ($u === '' || strpos($u, '/video/') !== false) continue;
+            // Nur Artikel
+            if (strpos($u, '/artikel/') === false) continue;
+            $t = $titleNode ? trim($titleNode->textContent) : "Ohne Titel";
+            $items[] = ['title' => $t, 'url' => $u];
+        }
+    } else {
+        echo "[WARN] RSS XML ungültig\n";
+    }
+    echo "[INFO] RSS-Artikel gefunden: " . count($items) . "\n";
+    return $items;
+}
+
+// ---------- 1) Basisseite ----------
+echo "[INFO] Lade Basisseite\n";
+$baseHtml = http_fetch($NEWS_URL, false, $NEWS_URL);
+list($teasersBase, $ajaxUrl, $rssUrl) = parseShzListingPage($baseHtml);
+
+foreach ($teasersBase as $t) {
+    if (!isset($seenUrls[$t['url']])) {
         $seenUrls[$t['url']] = true;
         $articles[] = $t;
-        $added++;
+    }
+}
+
+// ---------- 2) AJAX-Nachladen (3–5 Versuche) ----------
+$maxLoads = 5;
+$loadNum = 0;
+while ($ajaxUrl && $loadNum < $maxLoads) {
+    $loadNum++;
+    echo "[INFO] Lade weitere Inhalte ($loadNum): $ajaxUrl\n";
+    $payload = http_fetch($ajaxUrl, true, $NEWS_URL);
+    if (!$payload) {
+        echo "[WARN] AJAX-Chunk leer\n";
+        break;
+    }
+    $chunkHtml = extractHtmlFromMaybeJson($payload);
+    list($teasersChunk, $ajaxUrlNew) = parseShzListingPage($chunkHtml);
+
+    $added = 0;
+    foreach ($teasersChunk as $t) {
+        if (!isset($seenUrls[$t['url']])) {
+            $seenUrls[$t['url']] = true;
+            $articles[] = $t;
+            $added++;
+        }
     }
     echo "[INFO] Zusätzliche Teaser gefunden: $added\n";
 
-    // Nächste AJAX-URL aktualisieren
-    $nextAjaxUrl = $updatedAjaxUrl ?: null;
-
-    usleep(400000); // 0.4s Pause
+    // Wenn 0 gefunden wurde, trotzdem versuchen wir noch 1x weiter – sonst abbrechen
+    if ($added === 0 && $ajaxUrlNew === null) {
+        // Manche Implementierungen brauchen Parameter-Anpassungen — hier Abbruch.
+        break;
+    }
+    $ajaxUrl = $ajaxUrlNew ?: $ajaxUrl; // wenn die gleiche URL zurückkommt, verhindern wir Endlosschleifen via maxLoads
+    usleep(400000);
 }
 
-// 3) Artikel verarbeiten
+// ---------- 3) RSS-Fallback einbinden ----------
+$rssItems = fetchFromRss($rssUrl ?: 'https://www.shz.de/lokales/blaulicht-sh/rss');
+$addedRss = 0;
+foreach ($rssItems as $t) {
+    if (!isset($seenUrls[$t['url']])) {
+        $seenUrls[$t['url']] = true;
+        $articles[] = $t;
+        $addedRss++;
+    }
+}
+echo "[INFO] Aus RSS neu hinzugefügt: $addedRss\n";
+
+// ---------- 4) Artikel verarbeiten ----------
 foreach ($articles as $article) {
 
     if (urlExistsInDatabase($article["url"])) {
@@ -84,7 +247,7 @@ foreach ($articles as $article) {
         continue;
     }
 
-    $contentHtml = @file_get_contents($article["url"], false, $httpCtx);
+    $contentHtml = http_fetch($article["url"], false, $NEWS_URL);
     if (!$contentHtml) {
         echo "[WARN] Artikel konnte nicht geladen werden: {$article['url']}\n";
         continue;
@@ -94,7 +257,7 @@ foreach ($articles as $article) {
     @$dom2->loadHTML($contentHtml);
     $xpath2 = new DOMXPath($dom2);
 
-    // Versuche, Artikeltext robust zu extrahieren (SHZ hat mehrere Layoutvarianten, teils Paywall)
+    // Inhalt extrahieren (verschiedene Layoutvarianten + Paywall)
     $paragraphs = $xpath2->query("//div[contains(@class,'article__detail__content')]//p");
     if ($paragraphs->length === 0) {
         $paragraphs = $xpath2->query("//div[contains(@class,'article-detail')]//p");
@@ -102,7 +265,7 @@ foreach ($articles as $article) {
     if ($paragraphs->length === 0) {
         $paragraphs = $xpath2->query("//article//p");
     }
-    // Fallback auf Meta-Description, falls Paywall oder keine Absätze gefunden
+
     $contentText = "";
     if ($paragraphs->length > 0) {
         foreach ($paragraphs as $p) {
@@ -121,25 +284,14 @@ foreach ($articles as $article) {
         }
     }
 
-    // Keyword-Prüfung
+    // Keyword-Prüfung (inkl. Hyphen-Varianten tolerant)
     $found = false; $kw = null;
     foreach ($KEYWORDS as $k) {
-        if (preg_match('/\b' . preg_quote($k, '/') . '\b/i', $contentText)) {
-            $found = true;
-            $kw = $k;
+        $pattern = '/(?<!\pL)'.str_replace('\-','[- ]?',preg_quote($k,'/')).'(?!\pL)/iu';
+        if (preg_match($pattern, $contentText) || preg_match($pattern, $article['title'])) {
+            $found = true; $kw = $k;
             echo "[DEBUG] Schlüsselwort gefunden: $k\n";
             break;
-        }
-    }
-    // Letzter Fallback: in Titel prüfen, wenn Text knapp ist
-    if (!$found && mb_strlen($contentText) < 200) {
-        foreach ($KEYWORDS as $k) {
-            if (preg_match('/\b' . preg_quote($k, '/') . '\b/i', $article['title'])) {
-                $found = true;
-                $kw = $k;
-                echo "[DEBUG] Schlüsselwort im Titel gefunden: $k\n";
-                break;
-            }
         }
     }
     if (!$found) {
@@ -154,59 +306,45 @@ foreach ($articles as $article) {
         continue;
     }
 
-    $type = "Sonstige";
+    $type = $gptResult['typ'] ?? "Sonstige";
     $gptOrt = $gptResult['ort'] ?? null;
     $gptLat = $gptResult['koord']['lat'] ?? null;
     $gptLon = $gptResult['koord']['lon'] ?? null;
     $federal = $gptResult['bundesland'] ?? null;
 
     if ($gptOrt) echo "[GPT] Ort erkannt: $gptOrt\n";
-    echo "[GPT] Typ erkannt: " . ($gptResult['typ'] ?? $type) . "\n";
+    echo "[GPT] Typ erkannt: $type\n";
     if ($gptLat && $gptLon) echo "[GPT] Koordinaten erkannt: $gptLat, $gptLon\n";
 
-    $type = $gptResult['typ'] ?? "Sonstige";
-
-    // Fallback-Logik bei fehlendem Ort
+    // Fallback-Logik Ort/Koordinaten/Bundesland
     $location = $gptOrt ?: extractLocation($contentText);
-    if (!$location) {
-        echo "[WARN] Kein Ort durch GPT oder Fallback-Logik gefunden\n";
-    }
+    if (!$location) echo "[WARN] Kein Ort durch GPT oder Fallback-Logik gefunden\n";
 
-    $lat = $gptLat;
-    $lon = $gptLon;
-
-    // Wenn GPT keine Koordinaten liefert → Fallback auf Geocoding
+    $lat = $gptLat; $lon = $gptLon;
     if ((!$lat || !$lon) && $location) {
         list($lat, $lon) = geocodeLocation($location);
-        if ($lat && $lon) {
-            echo "[INFO] Fallback-Koordinaten ermittelt: $lat, $lon\n";
-        } else {
-            echo "[WARN] Fallback-Geocoding fehlgeschlagen\n";
-        }
+        if ($lat && $lon) echo "[INFO] Fallback-Koordinaten ermittelt: $lat, $lon\n";
+        else echo "[WARN] Fallback-Geocoding fehlgeschlagen\n";
     }
 
-    // Bundesland ermitteln (sofern Koordinaten vorhanden)
     if (!$federal && $lat && $lon) {
         $federal = getFederalState($lat, $lon);
-        if ($federal) {
-            echo "[INFO] Bundesland (Koordinaten-Fallback): $federal\n";
-        }
+        if ($federal) echo "[INFO] Bundesland (Koordinaten-Fallback): $federal\n";
     }
     if ($federal) echo "[INFO] Bundesland: $federal\n";
 
-    // Veröffentlichungsdatum robust extrahieren
+    // Veröffentlichungsdatum
     $date = extractIsoDate($xpath2);
-    if ($date) {
-        echo "[DEBUG] Veröffentlichungsdatum extrahiert: $date\n";
-    } else {
+    if ($date) echo "[DEBUG] Veröffentlichungsdatum extrahiert: $date\n";
+    else {
         echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
         $date = gmdate("Y-m-d");
     }
 
-    // Kurze Summary bauen (aus den ersten sinnvollen Absätzen oder Meta)
+    // Summary
     $summary = ($paragraphs->length > 0) ? buildSummary($paragraphs) : mb_substr($contentText, 0, 300);
 
-    echo "[DEBUG] Speichere Artikel mit Keyword: $kw\n";
+    echo "[DEBUG] Speichere Artikel mit Keyword: ".($kw ?? '-')."\n";
     echo "[DEBUG] Titel: {$article['title']}\n";
     echo "[DEBUG] URL: {$article['url']}\n";
     $lowerText = mb_strtolower($contentText);
@@ -227,56 +365,7 @@ foreach ($articles as $article) {
 echo "[INFO] Gesamt verarbeitete Artikel mit passendem Keyword: $relevantCount\n";
 
 
-/**
- * Hilfsfunktionen
- */
-
-function parseShzListingPage($html, $baseUrl) {
-    // Liefert: [ [ ['title'=>..., 'url'=>...], ... ], $nextAjaxUrl ]
-    $dom = new DOMDocument();
-    @$dom->loadHTML($html);
-    $xpath = new DOMXPath($dom);
-
-    $items = [];
-
-    // Alle Teaser (News/Video) aufnehmen
-    $nodes = $xpath->query("//div[contains(@class,'article__teaser')]//a[contains(@href,'/lokales/')][@target='_self' or not(@target)]");
-    $picked = 0;
-    foreach ($nodes as $a) {
-        $href = trim($a->getAttribute("href"));
-        if ($href === '' || strpos($href, '/video/') !== false) continue; // Video-Teaser überspringen
-        // Volle URL bauen
-        $full = (strpos($href, 'http') === 0) ? $href : rtrim('https://www.shz.de', '/') . '/' . ltrim($href, '/');
-
-        // Titel
-        $title = trim($a->textContent);
-        if ($title === '') {
-            // Alternative: H3 innerhalb Teasers
-            $h = $a->parentNode ? $a->parentNode->getElementsByTagName('h3')->item(0) : null;
-            if ($h) $title = trim($h->textContent);
-        }
-        if ($title === '') {
-            // Letzter Fallback: data-article-id referenziert? Dann ignorieren wir ohne Titel nicht.
-            $title = "Ohne Titel";
-        }
-
-        $items[] = ['title' => $title, 'url' => $full];
-        $picked++;
-    }
-    echo "[INFO] Teaser auf Seite/Chunk: $picked\n";
-
-    // Button „Weitere Inhalte laden“ finden -> nächste AJAX-URL
-    $btn = $xpath->query("//button[contains(@class,'button-reload') and @data-url]");
-    $nextAjaxUrl = null;
-    if ($btn->length > 0) {
-        $dataUrl = $btn->item(0)->getAttribute('data-url');
-        if ($dataUrl) {
-            $nextAjaxUrl = (strpos($dataUrl, 'http') === 0) ? $dataUrl : rtrim('https://www.shz.de', '/') . '/' . ltrim($dataUrl, '/');
-        }
-    }
-
-    return [$items, $nextAjaxUrl];
-}
+// ----------------- Hilfsfunktionen aus deinem Bestand + Anpassungen -----------------
 
 function extractMetaDescription(DOMXPath $xpath) {
     $nodes = $xpath->query("//meta[@name='description']/@content");

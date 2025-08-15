@@ -1,4 +1,9 @@
 <?php
+/**
+ * scraper/mv.php
+ * Scraper für: https://www.polizei.mvnet.de/Presse/Pressemitteilungen/
+ * Funktionsweise analog zu presseportal.php, aber mit MV-spezifischem HTML und Pagination.
+ */
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
@@ -7,65 +12,72 @@ $dotenv->load();
 
 // Konfiguration aus .env
 $KEYWORDS = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
-//KEYWORDS=glücksspiel,spielhalle,spielautomat,casino,lotto,lotterie,online-casino,automatenspiele
-//$KEYWORDS = ['Drogen']; //Testzwecke
-$NEWS_URL = 'https://www.polizei.bremen.de/news/pressestelle-60902';
 $SUPABASE_URL = $_ENV['SUPABASE_URL'] ?? '';
 $SUPABASE_KEY = $_ENV['SUPABASE_KEY'] ?? '';
+$OPENAI_API_KEY = $_ENV['OPENAI_API_KEY'] ?? '';
 
-echo "[INFO] News-URL: $NEWS_URL\n";
+// Eigene Basis-URL für MV (bewusst NICHT NEWS_URL wiederverwenden, um Konflikte mit anderen Scrapers zu vermeiden)
+$MV_URL = 'https://www.polizei.mvnet.de/Presse/Pressemitteilungen/';
+
+// Paging-Einstellungen (MV listet 10 Items/Seite; Beispiel-Links zeigen offset=10,20,...)
+$pageCount = intval($_ENV['MV_PAGE_COUNT'] ?? 20); // Anzahl Seiten (Standard 30)
+$itemsPerPage = 10;
+
+echo "[INFO] MV-URL: $MV_URL\n";
 echo "[INFO] Schlüsselwörter: " . implode(', ', $KEYWORDS) . "\n";
 
 $articles = [];
 $seenUrls = [];
 $relevantCount = 0;
 
-// Startseite laden (Liste aktueller Pressemeldungen)
-echo "[INFO] Lade Übersichtsseite: $NEWS_URL\n";
-$indexHtml = @file_get_contents($NEWS_URL);
-if (!$indexHtml) {
-    echo "[ERROR] Konnte Übersichtsseite nicht laden: $NEWS_URL\n";
-    exit(1);
-}
-
-$domIdx = new DOMDocument();
-@$domIdx->loadHTML($indexHtml);
-$xpIdx = new DOMXPath($domIdx);
-
-// Einträge aus der Liste holen
-$nodes = $xpIdx->query("//ul[contains(@class,'news_liste')]//a[contains(@class,'direct')]");
-echo "[INFO] Gefundene Listeneinträge: " . $nodes->length . "\n";
-
-foreach ($nodes as $a) {
-    $title = trim($xpIdx->evaluate("string(.//span)", $a));
-    $href  = $a->getAttribute("href");
-    $dateAttr = trim($xpIdx->evaluate("string(.//time/@datetime)", $a));
-    $dateText = trim($xpIdx->evaluate("string(.//time)", $a));
-
-    // Absolute URL bauen
-    if (strpos($href, 'http') !== 0) {
-        $href = "https://www.polizei.bremen.de" . (substr($href, 0, 1) === '/' ? '' : '/') . $href;
+// Seiten laden
+for ($i = 0; $i < $pageCount; $i++) {
+    if ($i === 0) {
+        $url = rtrim($MV_URL, '/').'/';
+    } else {
+        $offset = $i * $itemsPerPage;
+        // Beispiel aus HTML: ?pager.page.nr=1&pager.items.offset=10  -> nr startet bei 1 für Seite 2
+        $url = rtrim($MV_URL, '/').'/?pager.page.nr=' . $i . '&pager.items.offset=' . $offset;
     }
 
-    // Duplikate vermeiden
-    if (isset($seenUrls[$href])) continue;
-    $seenUrls[$href] = true;
-
-    // Datum bevorzugt aus datetime, sonst aus sichtbarem Text (DD.MM.YYYY -> YYYY-MM-DD)
-    $date = null;
-    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateAttr)) {
-        $date = $dateAttr;
-    } elseif (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', $dateText, $m)) {
-        $date = "{$m[3]}-{$m[2]}-{$m[1]}";
+    echo "[INFO] Lade Seite: $url\n";
+    $html = @file_get_contents($url);
+    if (!$html) {
+        echo "[WARN] Fehler beim Laden: $url\n";
+        continue;
     }
 
-    $articles[] = ["title" => $title, "url" => $href, "list_date" => $date];
+    $dom = new DOMDocument();
+    @$dom->loadHTML($html);
+    $xpath = new DOMXPath($dom);
+
+    // Teaser-Elemente der Liste
+    $teasers = $xpath->query("//div[contains(@class,'teaser') and contains(@class,'dvz-contenttype-presseserviceassistent')]");
+    echo "[INFO] Treffer (Teaser) auf Seite $i: " . $teasers->length . "\n";
+
+    foreach ($teasers as $teaser) {
+        // Titel und Link
+        $a = $xpath->query(".//h3//a", $teaser)->item(0);
+        if (!$a) { continue; }
+        $titleRaw = trim($a->textContent);
+        // Titel wie bei Presseportalen mit "POL-XYZ:" am Anfang bereinigen
+        $title = preg_replace('/^POL-[A-ZÄÖÜ]{1,5}:\s*/u', '', $titleRaw);
+
+        $href = $a->getAttribute("href");
+        if (!$href) { continue; }
+        $fullUrl = (strpos($href, 'http') === 0) ? $href : "https://www.polizei.mvnet.de" . $href;
+
+        if (isset($seenUrls[$fullUrl])) continue; // Duplikat
+        $seenUrls[$fullUrl] = true;
+
+        $articles[] = ["title" => $title, "url" => $fullUrl];
+    }
+
+    usleep(500000); // 0.5s Pause
 }
 
 // Artikel verarbeiten
 foreach ($articles as $article) {
-    echo "[INFO] Verarbeite Listeneintrag: {$article['title']}\n";
-
     if (urlExistsInDatabase($article["url"])) {
         echo "[INFO] Artikel bereits in Datenbank, übersprungen: {$article['url']}\n";
         continue;
@@ -77,33 +89,22 @@ foreach ($articles as $article) {
         continue;
     }
 
-    $dom = new DOMDocument();
-    @$dom->loadHTML($contentHtml);
-    $xp = new DOMXPath($dom);
+    $dom2 = new DOMDocument();
+    @$dom2->loadHTML($contentHtml);
+    $xpath2 = new DOMXPath($dom2);
 
-    // Falls die URL einen Fragment-Anker besitzt, gezielt ab dort lesen
-    $fragment = parse_url($article['url'], PHP_URL_FRAGMENT);
-    $paragraphs = null;
+    // Inhalt sammeln – mehrere Fallbacks
+    // 1) Häufig: innerhalb einer Detailansicht des Presseservice-Assistenten
+    $paragraphs = $xpath2->query("(//div[contains(@class,'dvz-contenttype-presseserviceassistent')])[1]//p");
 
-    if ($fragment) {
-        // Paragraphen nach dem Fragment sammeln (Begrenzung, um nicht die ganze Seite einzusammeln)
-        $paragraphs = $xp->query("//*[@id='$fragment']/following::p[position() <= 60]");
-        if ($paragraphs->length === 0) {
-            // Alternativer Versuch: nächster Container-Abschnitt
-            $paragraphs = $xp->query("//*[(@id='$fragment')]/following::*[self::div or self::section][1]//p");
-        }
+    // 2) Breiter gefasst: jeglicher Content-Bereich
+    if ($paragraphs->length === 0) {
+        $paragraphs = $xpath2->query("//div[contains(@class,'content') or contains(@class,'dvz-contenttype-pagecontent')]//p");
     }
 
-    // Fallbacks, wenn kein Fragment oder nichts gefunden
-    if (!$paragraphs || $paragraphs->length === 0) {
-        // Häufig liegt Text in Inhaltsbereichen mit 'article' oder 'entry-wrapper'
-        $paragraphs = $xp->query("(//div[contains(@class,'article')])[1]//p");
-        if ($paragraphs->length === 0) {
-            $paragraphs = $xp->query("//div[contains(@class,'entry-wrapper')][1]//p");
-        }
-        if ($paragraphs->length === 0) {
-            $paragraphs = $xp->query("//p");
-        }
+    // 3) Fallback auf alle p
+    if ($paragraphs->length === 0) {
+        $paragraphs = $xpath2->query("//p");
     }
 
     if ($paragraphs->length === 0) {
@@ -111,34 +112,27 @@ foreach ($articles as $article) {
         continue;
     }
 
-    // Text zusammenbauen, störende Footer/Meta-Blöcke überspringen
     $contentText = "";
     foreach ($paragraphs as $p) {
         $line = trim($p->textContent);
 
-        if ($line === '') continue;
-
-        // Stopp- und Skipmuster
-        if (preg_match('/^(weitere meldungen|original-content|druckversion|pdf-version|orte in dieser meldung|themen in dieser meldung|rückfragen bitte an|kontakt|impressum|datenschutzerklärung)/i', $line)) {
+        // Footer-/Metabereiche überspringen (angepasst + generisch)
+        if (preg_match('/^(weitere meldungen|original-content|druckversion|pdf-version|orte in dieser meldung|themen in dieser meldung|rückfragen bitte an|kontakt|hinweise|anhang)/i', $line)) {
             break;
         }
 
-        // Offensichtliche Navigations/Meta-Zeilen auslassen
-        if (preg_match('/^(zur(?:\s+)?navigation|zum inhalt|zur fußzeile|barrierefreiheit)/i', $line)) {
-            continue;
-        }
-
+        // Manche Seiten setzen (ots) etc.; nicht problematisch, aber wir halten Text flach
         $contentText .= $line . "\n";
     }
 
-    // Schlüsselwörter prüfen
+    // Keyword-Check
     $found = false;
-    $kw = null;
-    foreach ($KEYWORDS as $kwItem) {
-        if (preg_match('/\b' . preg_quote($kwItem, '/') . '\b/i', $contentText)) {
+    $kwMatched = null;
+    foreach ($KEYWORDS as $kw) {
+        if (preg_match('/\b' . preg_quote($kw, '/') . '\b/i', $contentText)) {
             $found = true;
-            $kw = $kwItem;
-            echo "[DEBUG] Schlüsselwort gefunden: $kwItem\n";
+            $kwMatched = $kw;
+            echo "[DEBUG] Schlüsselwort gefunden: $kw\n";
             break;
         }
     }
@@ -148,36 +142,24 @@ foreach ($articles as $article) {
         continue;
     }
 
-    // GPT-Metadaten extrahieren
+    // GPT-Metadaten
     $gptResult = extractMetadataWithGPT($contentText);
-
     if (!$gptResult || !is_array($gptResult) || ($gptResult['illegal'] ?? false) !== true) {
         echo "[INFO] Kein Fall von illegalem Glücksspiel – Artikel verworfen\n";
         continue;
     }
 
-    $type = "Sonstige"; // Default
-    $gptOrt = null;
-    $gptLat = null;
-    $gptLon = null;
+    $type = "Sonstige";
+    $gptOrt = $gptResult['ort'] ?? null;
+    $gptLat = $gptResult['koord']['lat'] ?? null;
+    $gptLon = $gptResult['koord']['lon'] ?? null;
+    $federal = $gptResult['bundesland'] ?? null;
 
-    if ($gptResult && is_array($gptResult)) {
-        $gptOrt = $gptResult['ort'] ?? null;
-        $type = $gptResult['typ'] ?? "Sonstige";
-        $gptLat = $gptResult['koord']['lat'] ?? null;
-        $gptLon = $gptResult['koord']['lon'] ?? null;
-        $federal = $gptResult['bundesland'] ?? null;
+    if ($gptOrt) echo "[GPT] Ort erkannt: $gptOrt\n";
+    echo "[GPT] Typ erkannt: " . ($gptResult['typ'] ?? "Sonstige") . "\n";
+    if ($gptLat && $gptLon) echo "[GPT] Koordinaten erkannt: $gptLat, $gptLon\n";
 
-        if ($gptOrt) {
-            echo "[GPT] Ort erkannt: $gptOrt\n";
-        }
-        echo "[GPT] Typ erkannt: $type\n";
-        if ($gptLat && $gptLon) {
-            echo "[GPT] Koordinaten erkannt: $gptLat, $gptLon\n";
-        }
-    }
-
-    // Fallback-Ort
+    // Fallback-Ortserkennung
     $location = $gptOrt ?: extractLocation($contentText);
     if (!$location) {
         echo "[WARN] Kein Ort durch GPT oder Fallback-Logik gefunden\n";
@@ -198,42 +180,36 @@ foreach ($articles as $article) {
         }
     }
 
-    // Bundesland ermitteln
-    $federal = $gptResult['bundesland'] ?? null;
+    // Bundesland (Fallback via Koordinaten)
     if (!$federal && $lat && $lon) {
         $federal = getFederalState($lat, $lon);
-        if ($federal) {
-            echo "[INFO] Bundesland (Koordinaten-Fallback): $federal\n";
+        if ($federal) echo "[INFO] Bundesland (Koordinaten-Fallback): $federal\n";
+    }
+    if ($federal) echo "[INFO] Bundesland: $federal\n";
+
+    // Veröffentlichungsdatum robust extrahieren
+    // Detailseite hat i.d.R. <span class="dtstart">14.08.2025</span>
+    $date = null;
+    $dateNode = $xpath2->query("//span[contains(@class,'dtstart')]");
+    if ($dateNode->length > 0) {
+        $dateText = trim($dateNode->item(0)->textContent);
+        // dd.mm.yyyy -> yyyy-mm-dd
+        if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', $dateText, $m)) {
+            $date = "{$m[3]}-{$m[2]}-{$m[1]}";
+            echo "[DEBUG] Veröffentlichungsdatum extrahiert (Detail): $date\n";
         }
     }
-    if ($federal) {
-        echo "[INFO] Bundesland: $federal\n";
-    }
-
-    // Veröffentlichungsdatum bestimmen:
-    // 1) Von der Liste, falls vorhanden
-    $date = $article['list_date'] ?? null;
-
-    // 2) Falls nicht vorhanden, aus <time> im Artikel
     if (!$date) {
-        $dateNode = $xp->query("//time[contains(@class,'date')]");
-        if ($dateNode->length > 0) {
-            $datetimeAttr = trim($dateNode[0]->getAttribute("datetime"));
-            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $datetimeAttr, $m)) {
-                $date = "{$m[1]}-{$m[2]}-{$m[3]}";
-                echo "[DEBUG] Veröffentlichungsdatum extrahiert: $date\n";
-            } else {
-                // Versuch über sichtbaren Text (DD.MM.YYYY)
-                $dateTxt = trim($dateNode[0]->textContent);
-                if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', $dateTxt, $m2)) {
-                    $date = "{$m2[3]}-{$m2[2]}-{$m2[1]}";
-                    echo "[DEBUG] Veröffentlichungsdatum (Text) extrahiert: $date\n";
-                }
+        // Versuch aus Meta im Dokumentenkopf
+        $metaDate = $xpath2->query("//meta[@property='article:published_time' or @name='date' or @name='publish-date' or @itemprop='datePublished']/@content");
+        if ($metaDate->length > 0) {
+            $dt = trim($metaDate->item(0)->nodeValue);
+            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $dt, $mx)) {
+                $date = "{$mx[1]}-{$mx[2]}-{$mx[3]}";
+                echo "[DEBUG] Veröffentlichungsdatum (Meta): $date\n";
             }
         }
     }
-
-    // 3) Fallback auf heute (UTC)
     if (!$date) {
         echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
         $date = gmdate("Y-m-d");
@@ -241,12 +217,13 @@ foreach ($articles as $article) {
 
     $summary = buildSummary($paragraphs);
 
-    echo "[DEBUG] Speichere Artikel mit Keyword: " . ($kw ?? '-') . "\n";
+    echo "[DEBUG] Speichere Artikel mit Keyword: $kwMatched\n";
     echo "[DEBUG] Titel: {$article['title']}\n";
     echo "[DEBUG] URL: {$article['url']}\n";
-    if ($kw) {
+
+    if ($kwMatched) {
         $lowerText = mb_strtolower($contentText);
-        $pos = mb_strpos($lowerText, mb_strtolower($kw));
+        $pos = mb_strpos($lowerText, mb_strtolower($kwMatched));
         if ($pos !== false) {
             $start = max(0, $pos - 20);
             $snippet = mb_substr($contentText, $start, 60);
@@ -256,10 +233,15 @@ foreach ($articles as $article) {
         }
     }
 
+    $type = $gptResult['typ'] ?? "Sonstige";
     saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"], $federal, $type);
 
     $relevantCount++;
 }
+
+echo "[INFO] Gesamt verarbeitete Artikel mit passendem Keyword: $relevantCount\n";
+
+/* -------------------- Hilfsfunktionen -------------------- */
 
 function extractLocation($text) {
     preg_match_all('/\b(?:in|bei|nahe)\s+(?!Richtung\b)(?!Höhe\b)([A-ZÄÖÜ][a-zäöüßA-ZÄÖÜ-]+)/u', $text, $matches);
@@ -336,7 +318,7 @@ function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url, $f
 function buildSummary($paragraphs) {
     foreach ($paragraphs as $p) {
         $line = trim($p->textContent);
-        if (preg_match('/^(mehr themen|[\d]{2}\.\d{2}\.\d{4}|rückfragen bitte an|^kreispolizeibehörde|^original-content|^pdf-version|^druckversion)/i', $line)) continue;
+        if (preg_match('/^(mehr themen|[\d]{2}\.\d{2}\.\d{4}|rückfragen bitte an|^kreispolizeibehörde|^original-content|^pdf-version|^druckversion|^kontakt)/i', $line)) continue;
         if (mb_strlen($line) > 80) {
             return mb_substr($line, 0, 300) . (mb_strlen($line) > 300 ? "..." : "");
         }
@@ -358,7 +340,19 @@ function getFederalState($lat, $lon) {
 }
 
 function extractMetadataWithGPT($text) {
-    $apiKey = $_ENV['OPENAI_API_KEY'];
+    $apiKey = $_ENV['OPENAI_API_KEY'] ?? '';
+
+    if (!$apiKey) {
+        // Ohne API-Key keine GPT-Anreicherung
+        return [
+            'ort' => null,
+            'typ' => 'Sonstige',
+            'koord' => ['lat' => null, 'lon' => null],
+            'bundesland' => null,
+            'illegal' => false
+        ];
+    }
+
     $url = 'https://api.openai.com/v1/chat/completions';
 
     $prompt = "Analysiere den folgenden Nachrichtentext. Gib das Ergebnis als JSON zurück mit den Feldern:
@@ -431,5 +425,3 @@ function urlExistsInDatabase($url) {
     $data = json_decode($response, true);
     return !empty($data); // true, wenn URL schon existiert
 }
-
-echo "[INFO] Gesamt verarbeitete Artikel mit passendem Keyword: $relevantCount\n";

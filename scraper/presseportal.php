@@ -19,12 +19,12 @@ echo "[INFO] Schlüsselwörter: " . implode(', ', $KEYWORDS) . "\n";
 $articles = [];
 $seenUrls = [];
 $relevantCount = 0;
-$pageCount = 60; //+++
+$pageCount = 40; //+++
 $step = 30;
 
 $SCRAPE_URLS = [
     ['base' => $NEWS_URL, 'type' => 'offset'], // z.B. https://www.presseportal.de/blaulicht
-    ['base' => 'https://www.presseportal.de/suche/gl%C3%BCcksspiel/blaulicht', 'type' => 'page'] // Such-URL mit ?page=
+    ['base' => 'https://www.presseportal.de/suche/gl%C3%BCcksspiel/blaulicht', 'type' => 'offset'] // Such-URL mit ?page=
 ];
 
 foreach ($SCRAPE_URLS as $source) {

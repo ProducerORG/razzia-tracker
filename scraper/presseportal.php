@@ -22,40 +22,54 @@ $relevantCount = 0;
 $pageCount = 60; //+++
 $step = 30;
 
-for ($i = 0; $i < $pageCount; $i++) {
-    $offset = $i * $step;
-    $url = $NEWS_URL;
-    if ($offset > 0) {
-        $url .= "/$offset";
+$SCRAPE_URLS = [
+    ['base' => $NEWS_URL, 'type' => 'offset'], // z.B. https://www.presseportal.de/blaulicht
+    ['base' => 'https://www.presseportal.de/suche/gl%C3%BCcksspiel/blaulicht', 'type' => 'page'] // Such-URL mit ?page=
+];
+
+foreach ($SCRAPE_URLS as $source) {
+    $baseUrl = $source['base'];
+    $mode = $source['type'];
+
+    for ($i = 0; $i < $pageCount; $i++) {
+        if ($mode === 'offset') {
+            $offset = $i * $step;
+            $url = $baseUrl . ($offset > 0 ? "/$offset" : '');
+        } elseif ($mode === 'page') {
+            $page = $i + 1;
+            $url = $baseUrl . '?page=' . $page;
+        } else {
+            continue;
+        }
+
+        echo "[INFO] Lade Seite: $url\n";
+        $html = @file_get_contents($url);
+        if (!$html) {
+            echo "[WARN] Fehler beim Laden: $url\n";
+            continue;
+        }
+
+        $dom = new DOMDocument();
+        @$dom->loadHTML($html);
+        $xpath = new DOMXPath($dom);
+        $nodes = $xpath->query("//a[contains(@href, '/blaulicht/pm/')]");
+
+        echo "[INFO] Artikel auf Seite ($url): " . $nodes->length . " (nur Links, keine Filterung)\n";
+
+        foreach ($nodes as $node) {
+            $titleRaw = trim($node->textContent);
+            $title = preg_replace('/^POL-[A-ZÄÖÜ]{1,5}:\s*/u', '', $titleRaw);
+            $href = $node->getAttribute("href");
+            $fullUrl = (strpos($href, 'http') === 0) ? $href : "https://www.presseportal.de$href";
+
+            if (isset($seenUrls[$fullUrl])) continue; // Duplikat
+            $seenUrls[$fullUrl] = true;
+
+            $articles[] = ["title" => $title, "url" => $fullUrl];
+        }
+
+        usleep(500000); // 0.5 Sekunden
     }
-
-    echo "[INFO] Lade Seite: $url\n";
-    $html = file_get_contents($url);
-    if (!$html) {
-        echo "[WARN] Fehler beim Laden: $url\n";
-        continue;
-    }
-
-    $dom = new DOMDocument();
-    @$dom->loadHTML($html);
-    $xpath = new DOMXPath($dom);
-    $nodes = $xpath->query("//a[contains(@href, '/blaulicht/pm/')]");
-
-    echo "[INFO] Artikel auf Seite ($offset): " . $nodes->length . " (nur Links, keine Filterung)\n";
-
-    foreach ($nodes as $node) {
-        $titleRaw = trim($node->textContent);
-        $title = preg_replace('/^POL-[A-ZÄÖÜ]{1,5}:\s*/u', '', $titleRaw);
-        $href = $node->getAttribute("href");
-        $fullUrl = (strpos($href, 'http') === 0) ? $href : "https://www.presseportal.de$href";
-    
-        if (isset($seenUrls[$fullUrl])) continue; // Duplikat
-        $seenUrls[$fullUrl] = true;
-    
-        $articles[] = ["title" => $title, "url" => $fullUrl];
-    }
-
-    usleep(500000); // 0.5 Sekunden warten, um Server nicht zu belasten
 }
 
 // Artikel verarbeiten

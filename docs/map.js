@@ -296,6 +296,8 @@ document.getElementById("reportForm").addEventListener("submit", function(e) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
+            const text = await res.text();
+            console.log("RAW Antwort:", text);
 
             spinner.style.display = "none";
 

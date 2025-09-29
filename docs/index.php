@@ -385,34 +385,45 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
             spinner.style.display = 'block';
             responseBox.textContent = "";
 
+            if (!recaptchaKey) {
+                console.error("Kein reCAPTCHA Site-Key konfiguriert");
+                responseBox.style.color = "red";
+                responseBox.textContent = "Fehler: Kein reCAPTCHA-Key gesetzt.";
+                spinner.style.display = 'none';
+                return;
+            }
+
             grecaptcha.ready(function () {
-                grecaptcha.execute(recaptchaKey, { action: 'submit' }).then(function (token) {
-                    fetch('/api', {
+                grecaptcha.execute(recaptchaKey, { action: 'submit' })
+                .then(function (token) {
+                    if (!token) {
+                        throw new Error("Kein reCAPTCHA-Token erhalten");
+                    }
+                    return fetch('/api?route=report', {   // Route angeben
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            message: message,
-                            source: source,
+                            message,
+                            source,
                             captcha: token
                         })
-                    })
-                    .then(response => {
-                        spinner.style.display = 'none';
-                        if (!response.ok) throw new Error("Fehler beim Senden");
-                        return response.json();
-                    })
-                    .then(data => {
-                        responseBox.style.color = "green";
-                        responseBox.textContent = "Meldung erfolgreich übermittelt.";
-                        document.getElementById('reportForm').reset();
-                    })
-                    .catch(err => {
-                        responseBox.style.color = "red";
-                        responseBox.textContent = "Fehler beim Senden. Bitte später erneut versuchen.";
-                        console.error("Fehler:", err);
                     });
+                })
+                .then(r => {
+                    spinner.style.display = 'none';
+                    if (!r.ok) throw new Error("Fehler beim Senden");
+                    return r.json();
+                })
+                .then(data => {
+                    responseBox.style.color = "green";
+                    responseBox.textContent = "Meldung erfolgreich übermittelt.";
+                    document.getElementById('reportForm').reset();
+                })
+                .catch(err => {
+                    spinner.style.display = 'none';
+                    responseBox.style.color = "red";
+                    responseBox.textContent = "Fehler beim Senden: " + err.message;
+                    console.error(err);
                 });
             });
         });

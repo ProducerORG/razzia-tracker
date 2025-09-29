@@ -19,7 +19,7 @@ echo "[INFO] Schlüsselwörter: " . implode(', ', $KEYWORDS) . "\n";
 $articles = [];
 $seenUrls = [];
 $relevantCount = 0;
-$pageCount = 40; //+++
+$pageCount = 20; //+++
 $step = 30;
 
 $SCRAPE_URLS = [

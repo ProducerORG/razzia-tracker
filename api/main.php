@@ -83,79 +83,103 @@ function handleGetRaids() {
 
 // E-Mail-Report verarbeiten
 function handleReport() {
-    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        http_response_code(405);
-        echo json_encode(['error' => 'Method Not Allowed']);
-        exit();
-    }
+    try {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+            http_response_code(405);
+            echo json_encode(['error' => 'Method Not Allowed']);
+            return;
+        }
 
-    $data = json_decode(file_get_contents('php://input'), true);
+        $raw = file_get_contents('php://input');
+        $data = json_decode($raw, true);
+        if (!is_array($data)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid JSON']);
+            return;
+        }
 
-    if (!isset($data['message'], $data['source'], $data['captcha'])) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Alle Felder müssen ausgefüllt sein.']);
-        exit();
-    }
+        if (!isset($data['message'], $data['source'], $data['captcha'])) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Alle Felder müssen ausgefüllt sein.']);
+            return;
+        }
 
-    $message = trim($data['message']);
-    $source = trim($data['source']);
-    $captcha = trim($data['captcha']);
+        $message = trim($data['message']);
+        $source  = trim($data['source']);
+        $captcha = trim($data['captcha']);
 
-    if (empty($message) || empty($source) || empty($captcha)) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Ungültige Eingabedaten.']);
-        exit();
-    }
+        if ($message === '' || $source === '' || $captcha === '') {
+            http_response_code(400);
+            echo json_encode(['error' => 'Ungültige Eingabedaten.']);
+            return;
+        }
 
-    // Captcha prüfen
-    $captchaResult = verifyCaptcha($captcha);
-    if ($captchaResult !== true) {
-        http_response_code(403);
-        echo json_encode(['error' => $captchaResult]);
-        exit();
-    }
+        $captchaResult = verifyCaptcha($captcha);
+        if ($captchaResult !== true) {
+            http_response_code(403);
+            echo json_encode(['error' => $captchaResult]);
+            return;
+        }
 
-    // E-Mail senden
-    $result = sendEmail($message, $source);
+        $result = sendEmail($message, $source);
+        if ($result !== true) {
+            error_log("sendEmail Fehler: " . $result);
+            http_response_code(500);
+            echo json_encode(['error' => $result]);
+            return;
+        }
 
-    if ($result !== true) {
+        echo json_encode(['status' => 'ok']);
+    } catch (Throwable $e) {
+        error_log("handleReport Fatal: " . $e->getMessage());
         http_response_code(500);
-        echo json_encode(['error' => $result]);
-        exit();
+        echo json_encode(['error' => 'Serverfehler']);
     }
-
-    echo json_encode(['status' => 'ok']);
 }
 
 function sendEmail($message, $source) {
     $SMTP_SERVER = getenv("SMTP_HOST") ?: "k75s74.meinserver.io";
-    $SMTP_PORT   = getenv("SMTP_PORT") ?: 587;
+    $SMTP_PORT   = (int)(getenv("SMTP_PORT") ?: 587);
     $SMTP_USER   = getenv("SMTP_USER") ?: "no-reply@glueckswirtschaft.de";
-    $SMTP_PASS   = getenv("SMTP_PASSWORD") ?: getenv("SMTP_KEY"); // Fallback für ältere env
-    $SMTP_TO     = getenv("SMTP_TO") ?: "linus@producer.works";
+    $SMTP_PASS   = getenv("SMTP_PASSWORD") ?: getenv("SMTP_KEY");
+    $SMTP_TO     = getenv("SMTP_TO") ?: "vladimir-ribic@storming-studios.com";
 
     if (!$SMTP_PASS) {
         return "SMTP-Key fehlt.";
     }
 
+    // Composer Autoload prüfen
+    $autoload = __DIR__ . '/../vendor/autoload.php';
+    if (!is_file($autoload)) {
+        error_log("autoload.php fehlt: $autoload");
+        return "Mailer nicht installiert (autoload.php fehlt).";
+    }
+    require_once $autoload;
+
+    // Klassenverfügbarkeit prüfen
+    if (!class_exists('Swift_SmtpTransport') || !class_exists('Swift_Mailer') || !class_exists('Swift_Message')) {
+        error_log("SwiftMailer-Klassen fehlen (Composer-Abhängigkeit nicht installiert).");
+        return "Mailer nicht installiert (SwiftMailer fehlt).";
+    }
+
     $subject = "Neue Razzia-Meldung";
     $body = "Neue Meldung eingegangen:\n\nMeldung:\n$message\n\nQuelle:\n$source";
 
-    require_once __DIR__ . '/../vendor/autoload.php';
-    $smtp = new Swift_SmtpTransport($SMTP_SERVER, $SMTP_PORT, 'tls');
-    $smtp->setUsername($SMTP_USER);
-    $smtp->setPassword($SMTP_PASS);
-    $mailer = new Swift_Mailer($smtp);
-
-    $messageObj = (new Swift_Message($subject))
-        ->setFrom([$SMTP_USER => 'Razzia-Tracker'])
-        ->setTo([$SMTP_TO])
-        ->setBody($body);
-
     try {
-        $result = $mailer->send($messageObj);
+        $smtp = new Swift_SmtpTransport($SMTP_SERVER, $SMTP_PORT, 'tls');
+        $smtp->setUsername($SMTP_USER);
+        $smtp->setPassword($SMTP_PASS);
+        $mailer = new Swift_Mailer($smtp);
+
+        $messageObj = (new Swift_Message($subject))
+            ->setFrom([$SMTP_USER => 'Razzia-Tracker'])
+            ->setTo([$SMTP_TO])
+            ->setBody($body);
+
+        $mailer->send($messageObj);
         return true;
-    } catch (Exception $e) {
+    } catch (Throwable $e) { // fängt auch Fatal Errors innerhalb Swift ab
+        error_log("SwiftMailer Fehler: " . $e->getMessage());
         return "E-Mail Fehler: " . $e->getMessage();
     }
 }

@@ -296,17 +296,33 @@ document.getElementById("reportForm").addEventListener("submit", function(e) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
-
+            
+            // Rohtext lesen, damit du Backend-Fehler siehst
+            const text = await res.text();
             spinner.style.display = "none";
-
-            if (res.ok) {
-                formResponse.style.color = "green";
-                formResponse.innerText = "Meldung erfolgreich gesendet!";
-                document.getElementById("reportForm").reset();
-            } else {
+            
+            if (!res.ok) {
+                console.error("Serverantwort (Fehler):", text);
                 formResponse.style.color = "red";
-                formResponse.innerText = "Fehler beim Senden.";
+                formResponse.innerText = text ? ("Fehler beim Senden: " + text) : ("Fehler beim Senden (HTTP " + res.status + ")");
+                return;
             }
+            
+            // Nur wenn ok -> JSON parsen
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error("JSON-Parse-Fehler, Rohtext:", text);
+                formResponse.style.color = "red";
+                formResponse.innerText = "Antwortformat ungültig.";
+                return;
+            }
+            
+            formResponse.style.color = "green";
+            formResponse.innerText = "Meldung erfolgreich gesendet!";
+            document.getElementById("reportForm").reset();
+            
         } catch (err) {
             spinner.style.display = "none";
             formResponse.style.color = "red";

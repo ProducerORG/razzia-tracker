@@ -368,7 +368,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
         const apiUrl = "<?= htmlspecialchars($apiUrl) ?>";
         const recaptchaKey = "<?= htmlspecialchars($recaptchaKey) ?>";
 
-        /* document.getElementById('reportForm').addEventListener('submit', function (e) {
+        document.getElementById('reportForm').addEventListener('submit', function (e) {
             e.preventDefault();
 
             const message = document.getElementById('message').value.trim();
@@ -439,7 +439,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
                     console.error(err);
                 });
             });
-        }); */
+        });
     </script>
     <script>
         window.addEventListener('DOMContentLoaded', () => {

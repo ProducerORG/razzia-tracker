@@ -121,13 +121,13 @@ function handleReport() {
             return;
         }
 
-        /* $result = sendEmail($message, $source);
+        $result = sendEmail($message, $source);
         if ($result !== true) {
             error_log("sendEmail Fehler: " . $result);
             http_response_code(500);
             echo json_encode(['error' => $result]);
             return;
-        } */
+        } 
 
         echo json_encode(['status' => 'ok']);
     } catch (Throwable $e) {
@@ -143,43 +143,53 @@ function sendEmail($message, $source) {
     $SMTP_USER   = getenv("SMTP_USER") ?: "no-reply@glueckswirtschaft.de";
     $SMTP_PASS   = getenv("SMTP_PASSWORD") ?: getenv("SMTP_KEY");
     $SMTP_TO     = getenv("SMTP_TO") ?: "vladimir-ribic@storming-studios.com";
+    $SMTP_ENC    = strtolower(trim(getenv("SMTP_ENCRYPTION") ?: 'tls')); // 'tls' (587) oder 'ssl' (465)
 
     if (!$SMTP_PASS) {
         return "SMTP-Key fehlt.";
     }
 
-    // Composer Autoload prüfen
-    $autoload = __DIR__ . '/../vendor/autoload.php';
-    if (!is_file($autoload)) {
-        error_log("autoload.php fehlt: $autoload");
-        return "Mailer nicht installiert (autoload.php fehlt).";
-    }
-    require_once $autoload;
-
-    // Klassenverfügbarkeit prüfen
-    if (!class_exists('Swift_SmtpTransport') || !class_exists('Swift_Mailer') || !class_exists('Swift_Message')) {
-        error_log("SwiftMailer-Klassen fehlen (Composer-Abhängigkeit nicht installiert).");
-        return "Mailer nicht installiert (SwiftMailer fehlt).";
-    }
-
-    $subject = "Neue Razzia-Meldung";
-    $body = "Neue Meldung eingegangen:\n\nMeldung:\n$message\n\nQuelle:\n$source";
-
     try {
-        $smtp = new Swift_SmtpTransport($SMTP_SERVER, $SMTP_PORT, 'tls');
-        $smtp->setUsername($SMTP_USER);
-        $smtp->setPassword($SMTP_PASS);
-        $mailer = new Swift_Mailer($smtp);
+        // Composer Autoloader laden
+        $autoload = __DIR__ . '/../vendor/autoload.php';
+        if (!is_file($autoload)) {
+            error_log("autoload.php fehlt: $autoload");
+            return "Mailer nicht installiert (autoload.php fehlt).";
+        }
+        require_once $autoload;
 
-        $messageObj = (new Swift_Message($subject))
-            ->setFrom([$SMTP_USER => 'Razzia-Tracker'])
-            ->setTo([$SMTP_TO])
-            ->setBody($body);
+        // Klassenprüfung (verhindert Fatals)
+        if (!class_exists(\Symfony\Component\Mailer\Mailer::class) ||
+            !class_exists(\Symfony\Component\Mime\Email::class) ||
+            !class_exists(\Symfony\Component\Mailer\Transport::class)) {
+            error_log("Symfony Mailer Klassen fehlen (symfony/mailer oder symfony/mime nicht installiert).");
+            return "Mailer nicht installiert (Symfony Mailer fehlt).";
+        }
 
-        $mailer->send($messageObj);
+        // DSN bauen (Username/Passwort URL-encoden!)
+        $user = rawurlencode($SMTP_USER);
+        $pass = rawurlencode($SMTP_PASS);
+
+        // encryption-Param: 'tls' für STARTTLS (587), 'ssl' für SMTPS (465)
+        $dsn = sprintf('smtp://%s:%s@%s:%d?encryption=%s', $user, $pass, $SMTP_SERVER, $SMTP_PORT, $SMTP_ENC);
+
+        $transport = \Symfony\Component\Mailer\Transport::fromDsn($dsn);
+        $mailer    = new \Symfony\Component\Mailer\Mailer($transport);
+
+        $subject = "Neue Razzia-Meldung";
+        $body    = "Neue Meldung eingegangen:\n\nMeldung:\n$message\n\nQuelle:\n$source";
+
+        $email = (new \Symfony\Component\Mime\Email())
+            ->from(new \Symfony\Component\Mime\Address($SMTP_USER, 'Razzia-Tracker'))
+            ->to($SMTP_TO)
+            ->subject($subject)
+            ->text($body);
+
+        $mailer->send($email);
         return true;
-    } catch (Throwable $e) { // fängt auch Fatal Errors innerhalb Swift ab
-        error_log("SwiftMailer Fehler: " . $e->getMessage());
+
+    } catch (\Throwable $e) {
+        error_log("Symfony Mailer Fehler: " . $e->getMessage());
         return "E-Mail Fehler: " . $e->getMessage();
     }
 }

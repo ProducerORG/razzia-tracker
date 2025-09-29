@@ -1,6 +1,7 @@
 {
     "require": {
         "vlucas/phpdotenv": "^5.5",
-        "swiftmailer/swiftmailer": "^6.3"
+        "symfony/mailer": "^7.3",
+        "symfony/mime": "^7.3"
     }
 }

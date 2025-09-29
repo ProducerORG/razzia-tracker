@@ -244,7 +244,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
 </head>
 <body>
     <div class="sidebar">
-        <img src="https://glueckswirtschaft.de/media/site/813e60f13a-1743167695/glueckswirtschaft-logo.svg" alt="Glückswirtschaft Logo" style="width: 100%; max-width: 160px; margin-bottom: 1rem;">
+<!--    <img src="https://glueckswirtschaft.de/media/site/813e60f13a-1743167695/glueckswirtschaft-logo.svg" alt="Glückswirtschaft Logo" style="width: 100%; max-width: 160px; margin-bottom: 1rem;">--> 
         <h3>Was ist der Razzia-Tracker?</h3>
         <p>Der Razzia-Tracker der <i>GlücksWirtschaft</i> dokumentiert polizeiliche Maßnahmen gegen illegales Glücksspiel in Deutschland. Ob Spielhallen, Hinterzimmer oder digitale Plattformen – hier finden Sie verlässliche und aktuelle Informationen über Durchsuchungen, Beschlagnahmungen und Ermittlungen. Unsere Redaktion sammelt und verifiziert fortlaufend Berichte aus offiziellen Quellen, Medien und Polizeimeldungen.</p>
         <h3>Warum das wichtig ist:</h3>

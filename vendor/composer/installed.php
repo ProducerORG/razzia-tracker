@@ -3,7 +3,7 @@
         'name' => 'razzia/tracker-php',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => 'd0c51fee01c1286ab4de474267589bb352ca3402',
+        'reference' => '4f821ac275ba10959a35839ad65ca160c519f1ce',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -73,7 +73,7 @@
         'razzia/tracker-php' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => 'd0c51fee01c1286ab4de474267589bb352ca3402',
+            'reference' => '4f821ac275ba10959a35839ad65ca160c519f1ce',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

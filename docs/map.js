@@ -288,7 +288,7 @@ document.getElementById("reportForm").addEventListener("submit", function(e) {
 
     grecaptcha.ready(async function () {
         try {
-            const token = await grecaptcha.execute(recaptchaKey, { action: "submit" });
+            const token = await grecaptcha.execute(window.recaptchaKey, { action: "submit" });
             const payload = { message, source, captcha: token };
 
             const res = await fetch('/index.php?route=report', {

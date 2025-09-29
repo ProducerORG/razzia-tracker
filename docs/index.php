@@ -394,6 +394,19 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
             }
 
             grecaptcha.ready(function () {
+                console.log("recaptchaKey:", recaptchaKey);
+                console.log("grecaptcha Objekt:", window.grecaptcha);
+                grecaptcha.ready(() => {
+                    console.log("Bin in grecaptcha.ready, versuche execute...");
+                    grecaptcha.execute(recaptchaKey, { action: 'submit' })
+                    .then(token => {
+                        console.log("Token erhalten:", token);
+                    })
+                    .catch(err => {
+                        console.error("execute-Fehler:", err);
+                    });
+                });
+
                 grecaptcha.execute(recaptchaKey, { action: 'submit' })
                 .then(function (token) {
                     if (!token) {

@@ -121,13 +121,13 @@ function handleReport() {
             return;
         }
 
-        $result = sendEmail($message, $source);
+        /* $result = sendEmail($message, $source);
         if ($result !== true) {
             error_log("sendEmail Fehler: " . $result);
             http_response_code(500);
             echo json_encode(['error' => $result]);
             return;
-        }
+        } */
 
         echo json_encode(['status' => 'ok']);
     } catch (Throwable $e) {

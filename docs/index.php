@@ -363,11 +363,11 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
     <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css" />
-    <script>
+    <!-- <script>
         const apiUrl = "<?= htmlspecialchars($apiUrl) ?>";
         const recaptchaKey = "<?= htmlspecialchars($recaptchaKey) ?>";
 
-        /* document.getElementById('reportForm').addEventListener('submit', function (e) {
+        document.getElementById('reportForm').addEventListener('submit', function (e) {
             e.preventDefault();
 
             const message = document.getElementById('message').value.trim();
@@ -438,7 +438,11 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
                     console.error(err);
                 });
             });
-        }); */
+        }); 
+    </script> -->
+    <script>
+        window.apiUrl = "<?= htmlspecialchars($apiUrl, ENT_QUOTES, 'UTF-8') ?>";
+        window.recaptchaKey = "<?= htmlspecialchars($recaptchaKey, ENT_QUOTES, 'UTF-8') ?>";
     </script>
     <script src="map.js"></script>
     <script>

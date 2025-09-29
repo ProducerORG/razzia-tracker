@@ -279,10 +279,11 @@ document.getElementById("reportForm").addEventListener("submit", function(e) {
 
     spinner.style.display = "block";
 
-    if (!window.recaptchaKey) {
+    if (!window.recaptchaKey || !window.grecaptcha) {
         spinner.style.display = "none";
         formResponse.style.color = "red";
-        formResponse.innerText = "Fehler: Kein reCAPTCHA-Key vorhanden.";
+        formResponse.innerText = "Fehler: Kein reCAPTCHA-Key vorhanden oder Library nicht geladen.";
+        console.error("recaptchaKey:", window.recaptchaKey, "grecaptcha:", window.grecaptcha);
         return;
     }
 

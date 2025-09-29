@@ -139,7 +139,7 @@ function sendEmail($message, $source) {
     $subject = "Neue Razzia-Meldung";
     $body = "Neue Meldung eingegangen:\n\nMeldung:\n$message\n\nQuelle:\n$source";
 
-    require_once 'vendor/autoload.php';
+    require_once __DIR__ . '/../vendor/autoload.php';
     $smtp = new Swift_SmtpTransport($SMTP_SERVER, $SMTP_PORT, 'tls');
     $smtp->setUsername($SMTP_USER);
     $smtp->setPassword($SMTP_PASS);

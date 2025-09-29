@@ -3,11 +3,11 @@
         'name' => 'razzia/tracker-php',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => '4f821ac275ba10959a35839ad65ca160c519f1ce',
+        'reference' => 'd7b9b8bb3e1f3fd9f862cff1fa8673cc8adedb78',
         'type' => 'library',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
-        'dev' => true,
+        'dev' => false,
     ),
     'versions' => array(
         'doctrine/lexer' => array(
@@ -73,7 +73,7 @@
         'razzia/tracker-php' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => '4f821ac275ba10959a35839ad65ca160c519f1ce',
+            'reference' => 'd7b9b8bb3e1f3fd9f862cff1fa8673cc8adedb78',
             'type' => 'library',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

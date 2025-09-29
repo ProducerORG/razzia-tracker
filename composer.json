@@ -1,6 +1,8 @@
 {
+    "name": "razzia/tracker-php",
+    "description": "Projektbeschreibung",
     "require": {
-        "vlucas/phpdotenv": "^5.5",
+        "phpmailer/phpmailer": "^6.8",
         "symfony/mailer": "^7.3",
         "symfony/mime": "^7.3",
         "symfony/polyfill-intl-normalizer": "^1.33",

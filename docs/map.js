@@ -261,12 +261,11 @@ function hideLoading() {
 
 /* MELDEFORMULAR */
 
-document.getElementById("reportForm").addEventListener("submit", async function(e) {
+document.getElementById("reportForm").addEventListener("submit", function(e) {
     e.preventDefault();
 
     const message = document.getElementById("message").value.trim();
     const source = document.getElementById("source").value.trim();
-    const captchaResponse = grecaptcha.getResponse();
     const formResponse = document.getElementById("formResponse");
     const spinner = document.getElementById("spinner");
 
@@ -278,39 +277,43 @@ document.getElementById("reportForm").addEventListener("submit", async function(
         return;
     }
 
-    if (!captchaResponse) {
+    spinner.style.display = "block";
+
+    if (!window.recaptchaKey) {
+        spinner.style.display = "none";
         formResponse.style.color = "red";
-        formResponse.innerText = "Bitte bestätige das CAPTCHA.";
+        formResponse.innerText = "Fehler: Kein reCAPTCHA-Key vorhanden.";
         return;
     }
 
-    spinner.style.display = "block";
+    grecaptcha.ready(async function () {
+        try {
+            const token = await grecaptcha.execute(recaptchaKey, { action: "submit" });
+            const payload = { message, source, captcha: token };
 
-    const payload = { message, source, captcha: captchaResponse };
+            const res = await fetch('/index.php?route=report', {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
 
-    try {
-        const res = await fetch('/index.php?route=report', {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
+            spinner.style.display = "none";
 
-        spinner.style.display = "none";
-
-        if (res.ok) {
-            formResponse.style.color = "green";
-            formResponse.innerText = "Meldung erfolgreich gesendet!";
-            document.getElementById("reportForm").reset();
-            grecaptcha.reset();
-        } else {
+            if (res.ok) {
+                formResponse.style.color = "green";
+                formResponse.innerText = "Meldung erfolgreich gesendet!";
+                document.getElementById("reportForm").reset();
+            } else {
+                formResponse.style.color = "red";
+                formResponse.innerText = "Fehler beim Senden.";
+            }
+        } catch (err) {
+            spinner.style.display = "none";
             formResponse.style.color = "red";
-            formResponse.innerText = "Fehler beim Senden.";
+            formResponse.innerText = "Serverfehler.";
+            console.error("Fehler:", err);
         }
-    } catch (err) {
-        spinner.style.display = "none";
-        formResponse.style.color = "red";
-        formResponse.innerText = "Serverfehler.";
-    }
 
-    setTimeout(() => { formResponse.innerText = ""; }, 5000);
+        setTimeout(() => { formResponse.innerText = ""; }, 5000);
+    });
 });

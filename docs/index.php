@@ -412,7 +412,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
                     if (!token) {
                         throw new Error("Kein reCAPTCHA-Token erhalten");
                     }
-                    return fetch('/api?route=report', {   // Route angeben
+                    return fetch('/index.php?route=report', {   // Route angeben
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({

@@ -285,7 +285,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
         </div> 
     </div>
     <div class="info-panel">
-        <div class="top-right-info">Beobachtung seit 01.07.2025</div>
+        <div class="top-right-info">Beobachtung seit 01.03.2025</div>
 
         <h3>Zeitraum filtern</h3>
         <label for="startDate">Von:</label>
@@ -458,7 +458,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
                 return `${year}-${month}-${day}`;
             };
 
-            startInput.value = '2025-07-01';
+            startInput.value = '2025-03-01';
             endInput.value = formatDate(today);
         });
     </script>

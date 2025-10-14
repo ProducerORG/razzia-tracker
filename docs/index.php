@@ -246,16 +246,16 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
     <div class="sidebar">
 <!--    <img src="https://glueckswirtschaft.de/media/site/813e60f13a-1743167695/glueckswirtschaft-logo.svg" alt="Glückswirtschaft Logo" style="width: 100%; max-width: 160px; margin-bottom: 1rem;">--> 
         <h3>Was ist der Razzia-Tracker?</h3>
-        <p>Der Razzia-Tracker der <i>GlücksWirtschaft</i> dokumentiert polizeiliche Maßnahmen gegen illegales Glücksspiel in Deutschland. Ob Spielhallen, Hinterzimmer oder digitale Plattformen – hier finden Sie verlässliche und aktuelle Informationen über Durchsuchungen, Beschlagnahmungen und Ermittlungen. Unsere Redaktion sammelt und verifiziert fortlaufend Berichte aus offiziellen Quellen, Medien und Polizeimeldungen.</p>
+        <p>Der Razzia-Tracker der <i>GlücksWirtschaft</i> dokumentiert behördliche Maßnahmen gegen illegales Glücksspiel in Deutschland. Ob Spielhallen, Hinterzimmer oder digitale Plattformen – hier finden Sie verlässliche und aktuelle Informationen über Durchsuchungen, Beschlagnahmungen und Ermittlungen. Unsere Redaktion sammelt und verifiziert fortlaufend Berichte aus offiziellen Quellen, Medien und Polizeimeldungen.</p>
         <h3>Warum das wichtig ist:</h3>
-        <p>Illegales Glücksspiel entzieht sich der Kontrolle, gefährdet Spieler und untergräbt den legalen Markt. Mit dem Razzia-Tracker schaffen wir erstmals überregional Transparenz – für Behörden, Politik, Branche und Öffentlichkeit.</p>
+        <p>Illegales Glücksspiel entzieht sich der staatlichen Kontrolle und Besteuerung, gefährdet Spieler und untergräbt – im Falle der Sportwette – die Integrität des sportlichen Wettbewerbs. Mit dem Razzia-Tracker schaffen wir erstmals überregional Transparenz – für Behörden, Politik, Branche und Öffentlichkeit.</p>
 
         <br><br>
         <div style="margin-top: 2rem; padding: 1.5rem; border: 1px solid #ccc; background-color: #ffffff; border-radius: 8px;">
             <h3>Meldung einreichen</h3>
             <form id="reportForm" style="display: flex; flex-direction: column; gap: 1rem;">
                 <div style="display: flex; flex-direction: column;">
-                    <label for="message" style="margin-bottom: 0.5rem;">Meldung:</label>
+                    <label for="message" style="margin-bottom: 0.5rem;">Neue Razzien-Meldung:</label>
                     <textarea id="message" name="message" rows="5"
                         style="box-sizing: border-box; width: 100%; padding: 0.6rem; border: 1px solid #ccc; border-radius: 4px; font-family: 'Inter', sans-serif; resize: none; overflow-y: auto; background-color: #f9f9f9;"></textarea>
                 </div>
@@ -321,7 +321,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
 
         <h3>Summe der Einträge</h3>
         <p><span id="entryCount">0</span></p>
-        <br><br><h3>Legende</h3>
+        <!-- <br><br><h3>Legende</h3>
         <p><div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
             <div style="width: 20px; height: 30px;"> 
                 <svg width="24" height="30" viewBox="0 0 24 30" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -357,7 +357,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
             </div>
             <span>&nbsp;&nbsp;Sonstige</span>
             </div> 
-        </p>
+        </p> -->
     </div>
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>

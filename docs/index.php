@@ -268,7 +268,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
 
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <button type="submit" 
-                        style="color: white; background-color: #003300; padding: 8px 10px; border: none; border-radius: 0; font-family: 'Inter', sans-serif; cursor: pointer;">
+                        style="color: white; background-color: #003300; padding: 8px 16px; border: none; border-radius: 0; font-family: 'Inter', sans-serif; cursor: pointer;">
                         Senden
                     </button>
                     <div id="spinner" class="spinner"></div>

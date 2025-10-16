@@ -251,7 +251,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
         <p>Illegales Glücksspiel entzieht sich der staatlichen Kontrolle und Besteuerung, gefährdet Spieler und untergräbt – im Falle der Sportwette – die Integrität des sportlichen Wettbewerbs. Mit dem Razzia-Tracker schaffen wir erstmals überregional Transparenz – für Behörden, Politik, Branche und Öffentlichkeit.</p>
 
         <br><br>
-        <div style="margin-top: 1rem; padding: 0.5rem; border: 1px solid #ccc; background-color: #ffffff; border-radius: 8px;">
+        <div style="margin-top: 1rem; padding: 1rem; border: 1px solid #ccc; background-color: #ffffff; border-radius: 8px;">
             <h3>Meldung einreichen</h3>
             <form id="reportForm" style="display: flex; flex-direction: column; gap: 0.5rem;">
                 <div style="display: flex; flex-direction: column;">

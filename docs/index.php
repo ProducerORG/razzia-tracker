@@ -251,22 +251,22 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
         <p>Illegales Glücksspiel entzieht sich der staatlichen Kontrolle und Besteuerung, gefährdet Spieler und untergräbt – im Falle der Sportwette – die Integrität des sportlichen Wettbewerbs. Mit dem Razzia-Tracker schaffen wir erstmals überregional Transparenz – für Behörden, Politik, Branche und Öffentlichkeit.</p>
 
         <br><br>
-        <div style="margin-top: 2rem; padding: 1.5rem; border: 1px solid #ccc; background-color: #ffffff; border-radius: 8px;">
+        <div style="margin-top: 1rem; padding: 0.5rem; border: 1px solid #ccc; background-color: #ffffff; border-radius: 8px;">
             <h3>Meldung einreichen</h3>
-            <form id="reportForm" style="display: flex; flex-direction: column; gap: 1rem;">
+            <form id="reportForm" style="display: flex; flex-direction: column; gap: 0.5rem;">
                 <div style="display: flex; flex-direction: column;">
-                    <label for="message" style="margin-bottom: 0.5rem;">Neue Razzien-Meldung:</label>
+                    <label for="message" style="margin-bottom: 0.5rem;">Wo war eine Razzia?</label>
                     <textarea id="message" name="message" rows="5"
                         style="box-sizing: border-box; width: 100%; padding: 0.6rem; border: 1px solid #ccc; border-radius: 4px; font-family: 'Inter', sans-serif; resize: none; overflow-y: auto; background-color: #f9f9f9;"></textarea>
                 </div>
 
                 <div style="display: flex; flex-direction: column;">
-                    <label for="source" style="margin-bottom: 0.5rem;">Quelle:</label>
+                    <label for="source" style="margin-bottom: 0.5rem;">Quelle?</label>
                     <input type="text" id="source" name="source"
                         style="box-sizing: border-box; width: 100%; padding: 0.6rem; border: 1px solid #ccc; border-radius: 4px; font-family: 'Inter', sans-serif; background-color: #f9f9f9;">
                 </div>
 
-                <div style="display: flex; align-items: center; gap: 1rem;">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <button type="submit" 
                         style="color: white; background-color: #003300; padding: 8px 16px; border: none; border-radius: 0; font-family: 'Inter', sans-serif; cursor: pointer;">
                         Senden
@@ -274,7 +274,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
                     <div id="spinner" class="spinner"></div>
                 </div>
 
-                <div id="formResponse" style="margin-top: 1rem; color: green;"></div>
+                <div id="formResponse" style="margin-top: 0.5rem; color: green;"></div>
             </form>
         </div>
     </div>

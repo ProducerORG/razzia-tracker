@@ -102,23 +102,23 @@ function getColor(type) {
     switch (type) {
         case "Automatenspiel":
         case "A":
-            return "#8b1e2e";  // dunkelrot
+            return "#8b1e2e";  // #8b1e2e dunkelrot
         case "Wetten":
         case "W":
-            return "#b89e1d";  // senfgelb
+            return "#8b1e2e";  // #b89e1d senfgelb
         case "Online-Spiele":
         case "O":
-            return "#2c3e75";  // dunkelblau
+            return "#8b1e2e";  // #2c3e75 dunkelblau
 
 
         case "Sonstige":
-            return "#b3541e";  // orangebraun
+            return "#8b1e2e";  // #b3541e orangebraun
         case "":
-            return "#b3541e";  // orangebraun
+            return "#8b1e2e";  // #b3541e orangebraun
         case null:
-            return "#b3541e";  // orangebraun
+            return "#8b1e2e";  // #b3541e orangebraun
         default:
-            return "#b3541e";  // orangebraun
+            return "#8b1e2e";  // #b3541e orangebraun
     }
 }
 

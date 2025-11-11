@@ -200,10 +200,10 @@ function filterAndRender() {
             const key = `${lat},${lon}`;
             const offsetIndex = positionOffsetMap.get(key) || 0;
             positionOffsetMap.set(key, offsetIndex + 1);
-
-            const angle = (offsetIndex * 50) * (Math.PI / 180);
-            const ring = Math.floor(offsetIndex / 8);
-            const radius = 0.1 + 0.05 * ring;
+            const baseAngle = Math.random() * 360;
+            const angle = (baseAngle + offsetIndex * 45) * (Math.PI / 180);
+            const ring = Math.floor(offsetIndex / 10);
+            const radius = 0.03 + 0.03 * ring;
             const latOffset = lat + radius * Math.cos(angle);
             const lonOffset = lon + radius * Math.sin(angle);
 

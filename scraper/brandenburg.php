@@ -197,8 +197,9 @@ foreach ($articles as $article) {
     echo "[DEBUG][BB] Veröffentlichungsdatum: $date\n";
 
     // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
-    if (strtotime($date) < strtotime("2025-07-01")) {
-        echo "[INFO] Artikel zu alt (Datum: $date) – ignoriert.\n";
+    $limitDate = date("Y-m-d", strtotime("-60 days"));
+    if (strtotime($date) < strtotime($limitDate)) {
+        echo "[INFO] Artikel zu alt (Datum: $date, Limit: $limitDate) – ignoriert.\n";
         continue;
     }
 

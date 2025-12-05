@@ -2,7 +2,7 @@
     "name": "razzia/tracker-php",
     "description": "Projektbeschreibung",
     "require": {
-        "phpmailer/phpmailer": "^6.8",
+        "phpmailer/phpmailer": "^7.0",
         "symfony/mailer": "^7.3",
         "symfony/mime": "^7.3",
         "symfony/polyfill-intl-normalizer": "^1.33",

@@ -57,17 +57,40 @@ foreach ($files as $file) {
     // Aufruf ohne Shell-Injection-Risiko
     $cmd = escapeshellarg($php) . ' ' . escapeshellarg($path);
 
-    // Ausgabe direkt durchreichen
-    ob_start();
-    passthru($cmd, $exitCode);
-    $output = ob_get_clean();
-
-    echo $output;
-
-    if ($exitCode !== 0) {
-        echo "[WARN] Scraper $file beendete sich mit Code $exitCode\n";
-        sendFailureMail($file, $exitCode, $output);
-    } else {
-        echo "[INFO] Fertig: $file\n\n";
-    }
+    $descriptorSpec = [
+        1 => ['pipe', 'w'], // stdout
+        2 => ['pipe', 'w']  // stderr
+    ];
+    
+    $process = proc_open($cmd, $descriptorSpec, $pipes);
+    
+    if (is_resource($process)) {
+        $output = '';
+    
+        while (!feof($pipes[1])) {
+            $line = fgets($pipes[1]);
+            if ($line === false) break;
+            echo $line;
+            $output .= $line;
+        }
+    
+        while (!feof($pipes[2])) {
+            $line = fgets($pipes[2]);
+            if ($line === false) break;
+            echo $line;
+            $output .= $line;
+        }
+    
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+    
+        $exitCode = proc_close($process);
+    
+        if ($exitCode !== 0) {
+            echo "[WARN] Scraper $file beendete sich mit Code $exitCode\n";
+            sendFailureMail($file, $exitCode, $output);
+        } else {
+            echo "[INFO] Fertig: $file\n\n";
+        }
+    }    
 }

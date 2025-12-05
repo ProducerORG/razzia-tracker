@@ -139,23 +139,29 @@ foreach ($articles as $article) {
         $federal = getFederalState($lat, $lon);
     }
 
-    // Veröffentlichungsdatum (oft <time datetime=""> oder aus Detailseite extrahierbar)
-    $dateNode = $xpath->query("//time[@datetime]");
-    if ($dateNode->length > 0) {
-        $datetimeAttr = $dateNode[0]->getAttribute("datetime");
-        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $datetimeAttr, $matches)) {
-            $date = "{$matches[1]}-{$matches[2]}-{$matches[3]}";
+        // Veröffentlichungsdatum (oft <time datetime=""> oder aus Detailseite extrahierbar)
+        $dateNode = $xpath->query("//time[@datetime]");
+        if ($dateNode->length > 0) {
+            $datetimeAttr = $dateNode[0]->getAttribute("datetime");
+            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $datetimeAttr, $matches)) {
+                $date = "{$matches[1]}-{$matches[2]}-{$matches[3]}";
+            } else {
+                $date = gmdate("Y-m-d");
+            }
         } else {
             $date = gmdate("Y-m-d");
         }
-    } else {
-        $date = gmdate("Y-m-d");
+    
+    // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
+    if (strtotime($date) < strtotime("2025-07-01")) {
+        echo "[INFO] Artikel zu alt (Datum: $date) – ignoriert.\n";
+        continue;
     }
-
-    $summary = buildSummary($paragraphs);
-
-    saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"], $federal, $type);
-    $relevantCount++;
+    
+        $summary = buildSummary($paragraphs);
+    
+        saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"], $federal, $type);
+        $relevantCount++;
 }
 
 echo "[INFO] Gesamt verarbeitete Artikel mit passendem Keyword: $relevantCount\n";

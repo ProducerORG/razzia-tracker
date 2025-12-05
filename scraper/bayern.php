@@ -104,8 +104,8 @@ foreach ($articles as $article) {
     // Keywords prüfen
     $found = false;
     $kw = null;
-    foreach ($KEYWORDS as $k) {
-        if (preg_match('/\b' . preg_quote($k, '/') . '\b/i', $contentText)) {
+    foreach ($KEYWORDS as $kw) {
+        if (preg_match('/' . $kw . '/i', $contentText)) {
             $found = true;
             $kw = $k;
             echo "[DEBUG] Schlüsselwort gefunden: $k\n";

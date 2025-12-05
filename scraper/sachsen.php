@@ -136,7 +136,7 @@ foreach ($articles as $article) {
     $found = false;
     $kw = null;
     foreach ($KEYWORDS as $kwTry) {
-        if (preg_match('/\b' . preg_quote($kwTry, '/') . '\b/i', $contentText)) {
+        if (preg_match('/' . $kwTry . '/i', $contentText)) {
             $found = true;
             $kw = $kwTry;
             echo "[DEBUG] Schlüsselwort gefunden: $kw\n";

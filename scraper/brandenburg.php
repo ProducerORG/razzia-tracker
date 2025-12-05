@@ -142,7 +142,7 @@ foreach ($articles as $article) {
     // Keyword-Check
     $matchedKw = null;
     foreach ($KEYWORDS as $kw) {
-        if (preg_match('/\b' . preg_quote($kw, '/') . '\b/ui', $contentText)) {
+        if (preg_match('/' . $kw . '/i', $contentText)) {
             $matchedKw = $kw;
             echo "[DEBUG][BB] Schlüsselwort gefunden: $kw\n";
             break;

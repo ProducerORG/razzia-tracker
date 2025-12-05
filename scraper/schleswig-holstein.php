@@ -287,7 +287,7 @@ foreach ($articles as $article) {
     // Keyword-Prüfung (inkl. Hyphen-Varianten tolerant)
     $found = false; $kw = null;
     foreach ($KEYWORDS as $k) {
-        $pattern = '/(?<!\pL)'.str_replace('\-','[- ]?',preg_quote($k,'/')).'(?!\pL)/iu';
+        $pattern = '/' . $k . '/iu';
         if (preg_match($pattern, $contentText) || preg_match($pattern, $article['title'])) {
             $found = true; $kw = $k;
             echo "[DEBUG] Schlüsselwort gefunden: $k\n";

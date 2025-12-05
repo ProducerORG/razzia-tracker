@@ -472,7 +472,7 @@ foreach ($articles as $article) {
     $found = false;
     $kw = null;
     foreach ($KEYWORDS as $kwCandidate) {
-        if (preg_match('/\b' . preg_quote($kwCandidate, '/') . '\b/i', $contentText)) {
+        if (preg_match('/' . $kwCandidate . '/i', $contentText)) {
             $found = true;
             $kw = $kwCandidate;
             echo "[DEBUG] Schlüsselwort gefunden: $kw\n";

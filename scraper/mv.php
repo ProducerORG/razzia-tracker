@@ -11,7 +11,7 @@ $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/../');
 $dotenv->load();
 
 // Konfiguration aus .env
-$KEYWORDS = json_decode(getenv('KEYWORDS'), true) ?? [];
+$KEYWORDS = json_decode($_ENV['KEYWORDS'], true) ?? [];
 $SUPABASE_URL = $_ENV['SUPABASE_URL'] ?? '';
 $SUPABASE_KEY = $_ENV['SUPABASE_KEY'] ?? '';
 $OPENAI_API_KEY = $_ENV['OPENAI_API_KEY'] ?? '';

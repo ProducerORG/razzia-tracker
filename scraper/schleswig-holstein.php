@@ -9,7 +9,7 @@ $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/../');
 $dotenv->load();
 
 // Konfiguration aus .env
-$KEYWORDS = json_decode(getenv('KEYWORDS'), true) ?? [];
+$KEYWORDS = json_decode($_ENV['KEYWORDS'], true) ?? [];
 //KEYWORDS=glücksspiel,spielhalle,spielautomat,casino,lotto,lotterie,online-casino,automatenspiele
 //$KEYWORDS = ['Drogen']; //Testzwecke
 $NEWS_URL = 'https://www.shz.de/lokales/blaulicht-sh';

@@ -295,7 +295,7 @@ function urlExistsInDatabase($url) {
 /* ----------------- Hauptlogik ----------------- */
 
 // Konfiguration
-$KEYWORDS       = json_decode(getenv('KEYWORDS'), true) ?? [];
+$KEYWORDS = json_decode($_ENV['KEYWORDS'], true) ?? [];
 $TARGET_ITEMS   = max(1, intval($_ENV['NRW_TARGET_ITEMS'] ?? 100));
 $MAX_RSS_PAGES  = max(1, intval($_ENV['NRW_RSS_PAGES'] ?? 2));   // RSS
 $MAX_AJAX_PAGES = max(1, intval($_ENV['NRW_AJAX_PAGES'] ?? 10)); // AJAX „mehr Ergebnisse“

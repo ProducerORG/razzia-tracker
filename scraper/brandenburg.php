@@ -10,7 +10,7 @@ $dotenv->load();
  * - $NEWS_URL: Einstiegsliste (Seite 1)
  * - Pagination: Folgeseiten gemäß Muster .../kategorie/null/{SEITE}/1?reset=1
  */
-$KEYWORDS = json_decode(getenv('KEYWORDS'), true) ?? [];
+$KEYWORDS = json_decode($_ENV['KEYWORDS'], true) ?? [];
 $SUPABASE_URL  = $_ENV['SUPABASE_URL'] ?? '';
 $SUPABASE_KEY  = $_ENV['SUPABASE_KEY'] ?? '';
 $NEWS_URL      = 'https://polizei.brandenburg.de/suche/typ/Meldungen/kategorie?reset=1';

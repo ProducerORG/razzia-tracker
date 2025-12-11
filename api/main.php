@@ -51,7 +51,7 @@ function handleGetRaids() {
         exit();
     }
     
-    $url = $SUPABASE_URL . "/rest/v1/raids?select=*";
+    $url = $SUPABASE_URL . "/rest/v1/raids?select=*&approved=eq.true";
 
     $headers = [
         "apikey: $SUPABASE_KEY",

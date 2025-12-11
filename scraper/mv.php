@@ -11,7 +11,7 @@ $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/../');
 $dotenv->load();
 
 // Konfiguration aus .env
-$KEYWORDS = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
+$KEYWORDS = json_decode(getenv('KEYWORDS'), true) ?? [];
 $SUPABASE_URL = $_ENV['SUPABASE_URL'] ?? '';
 $SUPABASE_KEY = $_ENV['SUPABASE_KEY'] ?? '';
 $OPENAI_API_KEY = $_ENV['OPENAI_API_KEY'] ?? '';
@@ -215,12 +215,12 @@ foreach ($articles as $article) {
         $date = gmdate("Y-m-d");
     }
 
-    // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
+    /* // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
     $limitDate = date("Y-m-d", strtotime("-60 days"));
     if (strtotime($date) < strtotime($limitDate)) {
         echo "[INFO] Artikel zu alt (Datum: $date, Limit: $limitDate) – ignoriert.\n";
         continue;
-    }
+    } */
 
     $summary = buildSummary($paragraphs);
 

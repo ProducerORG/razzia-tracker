@@ -9,7 +9,7 @@ $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/../');
 $dotenv->load();
 
 // Konfiguration aus .env
-$KEYWORDS = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
+$KEYWORDS = json_decode(getenv('KEYWORDS'), true) ?? [];
 //KEYWORDS=glücksspiel,spielhalle,spielautomat,casino,lotto,lotterie,online-casino,automatenspiele
 //$KEYWORDS = ['Drogen']; //Testzwecke
 $NEWS_URL = 'https://www.shz.de/lokales/blaulicht-sh';
@@ -341,12 +341,12 @@ foreach ($articles as $article) {
         $date = gmdate("Y-m-d");
     }
 
-    // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
+    /* // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
     $limitDate = date("Y-m-d", strtotime("-60 days"));
     if (strtotime($date) < strtotime($limitDate)) {
         echo "[INFO] Artikel zu alt (Datum: $date, Limit: $limitDate) – ignoriert.\n";
         continue;
-    }
+    } */
 
     // Summary
     $summary = ($paragraphs->length > 0) ? buildSummary($paragraphs) : mb_substr($contentText, 0, 300);

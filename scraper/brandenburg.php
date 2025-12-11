@@ -10,7 +10,7 @@ $dotenv->load();
  * - $NEWS_URL: Einstiegsliste (Seite 1)
  * - Pagination: Folgeseiten gemäß Muster .../kategorie/null/{SEITE}/1?reset=1
  */
-$KEYWORDS      = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
+$KEYWORDS = json_decode(getenv('KEYWORDS'), true) ?? [];
 $SUPABASE_URL  = $_ENV['SUPABASE_URL'] ?? '';
 $SUPABASE_KEY  = $_ENV['SUPABASE_KEY'] ?? '';
 $NEWS_URL      = 'https://polizei.brandenburg.de/suche/typ/Meldungen/kategorie?reset=1';
@@ -196,12 +196,12 @@ foreach ($articles as $article) {
     $date = extractDateBB($xp2, $contentHtml);
     echo "[DEBUG][BB] Veröffentlichungsdatum: $date\n";
 
-    // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
+    /* // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
     $limitDate = date("Y-m-d", strtotime("-60 days"));
     if (strtotime($date) < strtotime($limitDate)) {
         echo "[INFO] Artikel zu alt (Datum: $date, Limit: $limitDate) – ignoriert.\n";
         continue;
-    }
+    } */
 
     // Summary (erste brauchbare längere Zeile)
     $summary = buildSummaryBB($paragraphs);

@@ -295,7 +295,7 @@ function urlExistsInDatabase($url) {
 /* ----------------- Hauptlogik ----------------- */
 
 // Konfiguration
-$KEYWORDS       = array_filter(array_map('trim', explode(',', $_ENV['KEYWORDS'] ?? '')));
+$KEYWORDS       = json_decode(getenv('KEYWORDS'), true) ?? [];
 $TARGET_ITEMS   = max(1, intval($_ENV['NRW_TARGET_ITEMS'] ?? 100));
 $MAX_RSS_PAGES  = max(1, intval($_ENV['NRW_RSS_PAGES'] ?? 2));   // RSS
 $MAX_AJAX_PAGES = max(1, intval($_ENV['NRW_AJAX_PAGES'] ?? 10)); // AJAX „mehr Ergebnisse“
@@ -541,12 +541,12 @@ foreach ($articles as $article) {
         $date = gmdate("Y-m-d");
     }
 
-    // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
+    /* // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
     $limitDate = date("Y-m-d", strtotime("-60 days"));
     if (strtotime($date) < strtotime($limitDate)) {
         echo "[INFO] Artikel zu alt (Datum: $date, Limit: $limitDate) – ignoriert.\n";
         continue;
-    }
+    } */
 
     $summary = buildSummary($paragraphs);
 

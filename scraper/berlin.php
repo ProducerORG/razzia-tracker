@@ -57,7 +57,8 @@ $saveToSupabase = function ($title, $summary, $date, $location, $lat, $lon, $url
         "lon"      => $lon,
         "url"      => $url,
         "federal"  => $federal,
-        "type"     => $type
+        "type"     => $type,
+        "scraper" => true
     ]);
     $headers = [
         "apikey: $SUPABASE_KEY",

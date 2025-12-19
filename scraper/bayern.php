@@ -161,18 +161,131 @@ foreach ($articles as $article) {
     
         $summary = buildSummary($paragraphs);
     
-        saveToSupabase($article["title"], $summary, $date, $location, $lat, $lon, $article["url"], $federal, $type);
+        saveToSupabase(
+            $article["title"],
+            $summary,
+            $date,
+            $location,
+            $lat,
+            $lon,
+            $article["url"],
+            $federal,
+            $type
+        );
+
         $relevantCount++;
 }
 
-echo "[INFO] Gesamt verarbeitete Artikel mit passendem Keyword: $relevantCount\n";
+echo "[INFO] Gesamt verarbeitete Artikel: $relevantCount\n";
 
-// === Hilfsfunktionen (wie in presseportal.php, unverändert übernehmen) ===
+/* ================= Funktionen ================= */
 
-function extractLocation($text) { /* ... wie in presseportal.php ... */ }
-function geocodeLocation($location) { /* ... */ }
-function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url, $federal, $type) { /* ... */ }
-function buildSummary($paragraphs) { /* ... */ }
-function getFederalState($lat, $lon) { /* ... */ }
-function extractMetadataWithGPT($text) { /* ... */ }
-function urlExistsInDatabase($url) { /* ... */ }
+function extractLocation($text) {
+    preg_match_all('/\b(?:in|bei|nahe)\s+([A-ZÄÖÜ][a-zäöüßA-ZÄÖÜ-]+)/u', $text, $m);
+    return $m[1][0] ?? null;
+}
+
+function geocodeLocation($location) {
+    $url = "https://nominatim.openstreetmap.org/search?q=" . urlencode($location . ", Deutschland") . "&format=json&limit=1";
+    sleep(1);
+    $ctx = stream_context_create(["http" => ["header" => "User-Agent: razzia-map/1.0"]]);
+    $json = @file_get_contents($url, false, $ctx);
+    if (!$json) return [null, null];
+    $data = json_decode($json, true);
+    return $data ? [$data[0]['lat'], $data[0]['lon']] : [null, null];
+}
+
+function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url, $federal, $type) {
+    global $SUPABASE_URL, $SUPABASE_KEY;
+
+    $data = json_encode([
+        "title" => $title,
+        "summary" => $summary,
+        "date" => $date,
+        "location" => $location,
+        "lat" => $lat,
+        "lon" => $lon,
+        "url" => $url,
+        "federal" => $federal,
+        "type" => $type,
+        "scraper" => true
+    ]);
+
+    $ch = curl_init($SUPABASE_URL . "/rest/v1/raids");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $data,
+        CURLOPT_HTTPHEADER => [
+            "apikey: $SUPABASE_KEY",
+            "Authorization: Bearer $SUPABASE_KEY",
+            "Content-Type: application/json"
+        ]
+    ]);
+    curl_exec($ch);
+    curl_close($ch);
+}
+
+function buildSummary($paragraphs) {
+    foreach ($paragraphs as $p) {
+        $t = trim($p->textContent);
+        if (mb_strlen($t) > 80) return mb_substr($t, 0, 300);
+    }
+    return "";
+}
+
+function getFederalState($lat, $lon) {
+    $url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=$lat&lon=$lon";
+    sleep(1);
+    $ctx = stream_context_create(["http" => ["header" => "User-Agent: razzia-map/1.0"]]);
+    $json = @file_get_contents($url, false, $ctx);
+    $data = json_decode($json, true);
+    return $data['address']['state'] ?? null;
+}
+
+function extractMetadataWithGPT($text) {
+    $apiKey = $_ENV['OPENAI_API_KEY'];
+
+    $payload = [
+        "model" => "gpt-4",
+        "messages" => [[
+            "role" => "user",
+            "content" => mb_substr($text, 0, 2000)
+        ]],
+        "temperature" => 0.1
+    ];
+
+    $ch = curl_init("https://api.openai.com/v1/chat/completions");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode($payload),
+        CURLOPT_HTTPHEADER => [
+            "Authorization: Bearer $apiKey",
+            "Content-Type: application/json"
+        ]
+    ]);
+    $res = curl_exec($ch);
+    curl_close($ch);
+
+    $json = json_decode($res, true);
+    return json_decode($json['choices'][0]['message']['content'] ?? '', true);
+}
+
+function urlExistsInDatabase($url) {
+    global $SUPABASE_URL, $SUPABASE_KEY;
+    $q = $SUPABASE_URL . "/rest/v1/raids?url=eq." . urlencode($url) . "&select=url&limit=1";
+
+    $ch = curl_init($q);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            "apikey: $SUPABASE_KEY",
+            "Authorization: Bearer $SUPABASE_KEY"
+        ]
+    ]);
+    $res = curl_exec($ch);
+    curl_close($ch);
+
+    return !empty(json_decode($res, true));
+}

@@ -435,7 +435,8 @@ function saveToSupabase($title, $summary, $date, $location, $lat, $lon, $url, $f
         "lon" => $lon,
         "url" => $url,
         "federal" => $federal,
-        "type" => $type 
+        "type" => $type,
+        "scraper" => true 
     ]);
 
     $headers = [

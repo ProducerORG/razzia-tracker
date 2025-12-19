@@ -9,7 +9,7 @@ use PHPMailer\PHPMailer\Exception;
 $dotenv = Dotenv::createImmutable(__DIR__ . '/..');
 $dotenv->load();
 
-function sendFailureMail($scraper, $exitCode, $output = '') {
+function sendStatusMail($subject, $body) {
     $mail = new PHPMailer(true);
     try {
         $mail->isSMTP();
@@ -21,16 +21,27 @@ function sendFailureMail($scraper, $exitCode, $output = '') {
         $mail->Port = (int)$_ENV['SMTP_PORT'];
 
         $mail->setFrom($_ENV['SMTP_USER'], 'Razzia-Tracker: Scraper Monitor');
-        $mail->addAddress($_ENV['linus@producer.works']);
 
-        $mail->Subject = "Scraper-Fehler: $scraper (Exit $exitCode)";
-        $mail->Body = "Der Scraper '$scraper' hat sich mit Fehlercode $exitCode beendet.\n\nAusgabe:\n$output";
+        // Empfänger
+        if (!empty($_ENV['SMTP_TO'])) {
+            $mail->addAddress($_ENV['SMTP_TO']);
+        }
+        $mail->addAddress('linus@producer.works');
+
+        $mail->Subject = $subject;
+        $mail->Body = $body;
 
         $mail->send();
     } catch (Exception $e) {
-        // hier bewusst kein Abbruch, Logging reicht
         file_put_contents(__DIR__ . '/mail_error.log', $e->getMessage() . PHP_EOL, FILE_APPEND);
     }
+}
+
+function sendFailureMail($scraper, $exitCode, $output = '') {
+    sendStatusMail(
+        "Scraper-Fehler: $scraper (Exit $exitCode)",
+        "Der Scraper '$scraper' hat sich mit Fehlercode $exitCode beendet.\n\nAusgabe:\n$output"
+    );
 }
 
 // Startet jeden Scraper als separaten PHP-CLI-Prozess, um Namenskonflikte zu vermeiden.
@@ -47,19 +58,23 @@ usort($files, function($a, $b) {
     return strcmp($a, $b);
 });
 
+/* ===== SCRAPER START ===== */
+$startTime = date('Y-m-d H:i:s');
+sendStatusMail(
+    'Scraper gestartet',
+    "Der Scraper-Lauf wurde gestartet.\nZeit: $startTime\nQuelle: " . (php_sapi_name() === 'cli' ? 'CLI / Cron' : 'Web')
+);
+
 foreach ($files as $file) {
     $path = $dir . DIRECTORY_SEPARATOR . $file;
     echo "[INFO] Starte Scraper-Prozess: $file\n";
 
-    // PHP_BINARY ist i.d.R. gesetzt. Fallback auf 'php'.
     $php = defined('PHP_BINARY') && PHP_BINARY ? PHP_BINARY : 'php';
-
-    // Aufruf ohne Shell-Injection-Risiko
     $cmd = escapeshellarg($php) . ' ' . escapeshellarg($path);
 
     $descriptorSpec = [
-        1 => ['pipe', 'w'], // stdout
-        2 => ['pipe', 'w']  // stderr
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w']
     ];
     
     $process = proc_open($cmd, $descriptorSpec, $pipes);
@@ -94,3 +109,10 @@ foreach ($files as $file) {
         }
     }    
 }
+
+/* ===== SCRAPER ENDE ===== */
+$endTime = date('Y-m-d H:i:s');
+sendStatusMail(
+    'Scraper abgeschlossen',
+    "Der Scraper-Lauf wurde abgeschlossen.\nZeit: $endTime"
+);

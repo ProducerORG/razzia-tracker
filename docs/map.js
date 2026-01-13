@@ -235,9 +235,11 @@ function filterAndRender() {
 
         let infoText = "";
         if (filteredDates.length > 0) {
-            const minDate = startDate;
-            const maxDate = endDate;
-            const days = Math.floor((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1;
+            const start = new Date(startDateInput);
+            start.setHours(0, 0, 0, 0);
+            const end = new Date(endDateInput);
+            end.setHours(23, 59, 59, 999);
+            const days = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
             const formattedMinDate = minDate.toLocaleDateString('de-DE');
             infoText = `${count} in ${days} Tagen`;
         } else {

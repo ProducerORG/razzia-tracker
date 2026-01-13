@@ -234,14 +234,13 @@ function filterAndRender() {
         });
 
         let infoText = "";
-        if (filteredDates.length > 0) {
-            const start = new Date(startDateInput);
-            start.setHours(0, 0, 0, 0);
-            const end = new Date(endDateInput);
-            end.setHours(23, 59, 59, 999);
-            const days = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1;
-            const formattedMinDate = minDate.toLocaleDateString('de-DE');
+        if (startDate && endDate) {
+            const days = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
             infoText = `${count} in ${days} Tagen`;
+        } else if (startDate) {
+            infoText = `${count} ab ${startDate.toLocaleDateString('de-DE')}`;
+        } else if (endDate) {
+            infoText = `${count} bis ${endDate.toLocaleDateString('de-DE')}`;
         } else {
             infoText = `${count} Einträge`;
         }

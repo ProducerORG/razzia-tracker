@@ -235,7 +235,7 @@ function filterAndRender() {
 
         let infoText = "";
         if (filteredDates.length > 0) {
-            const minDate = new Date(Math.min(...filteredDates));
+            const minDate = new Date(document.getElementById("startDate").value);
             const maxDate = new Date(Math.max(...filteredDates));
             const days = Math.floor((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 1;
             const formattedMinDate = minDate.toLocaleDateString('de-DE');

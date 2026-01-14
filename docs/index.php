@@ -444,7 +444,7 @@ echo "<!-- DEBUG recaptchaKey: " . var_export(getenv('RECAPTCHA_SITE_KEY'), true
         window.apiUrl = "<?= htmlspecialchars($apiUrl, ENT_QUOTES, 'UTF-8') ?>";
         window.recaptchaKey = "<?= htmlspecialchars($recaptchaKey, ENT_QUOTES, 'UTF-8') ?>";
     </script>
-    <script src="map.js"></script>
+    <script src="map.js?v=20260114-1"></script>
     <script>
         window.addEventListener('DOMContentLoaded', () => {
             const startInput = document.getElementById('startDate');

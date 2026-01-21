@@ -13,9 +13,19 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer
+
       - name: Create .env file with correct line endings
         run: |
           echo "${{ secrets.ENV_FILE_CONTENT }}" | sed 's/\r$//' > .env
+
+      - name: Install composer dependencies
+        run: |
+          composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
       - name: Upload via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
@@ -29,6 +39,7 @@ jobs:
           exclude: |
             **/.git*
             **/.github*
+            **/node_modules/**
 
       - name: Install lftp
         run: sudo apt-get update && sudo apt-get install -y lftp

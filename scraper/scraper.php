@@ -58,7 +58,7 @@ usort($files, function($a, $b) {
     return strcmp($a, $b);
 });
 
-/* ===== SCRAPER START ===== */
+/* ==== SCRAPER START ==== */
 $startTime = date('Y-m-d H:i:s');
 sendStatusMail(
     'Scraper gestartet',

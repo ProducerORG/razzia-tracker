@@ -25,6 +25,8 @@ jobs:
 
       - name: Install composer dependencies
         run: |
+          rm -rf vendor
+          composer clear-cache
           composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
       - name: Upload via FTP

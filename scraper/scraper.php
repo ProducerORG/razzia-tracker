@@ -59,11 +59,11 @@ usort($files, function($a, $b) {
 });
 
 /* ==== SCRAPER START ==== */
-$startTime = date('Y-m-d H:i:s');
-sendStatusMail(
-    'Scraper gestartet',
-    "Der Scraper-Lauf wurde gestartet.\nZeit: $startTime\nQuelle: " . (php_sapi_name() === 'cli' ? 'CLI / Cron' : 'Web')
-);
+//$startTime = date('Y-m-d H:i:s');
+//sendStatusMail(
+//    'Scraper gestartet',
+//    "Der Scraper-Lauf wurde gestartet.\nZeit: $startTime\nQuelle: " . (php_sapi_name() === 'cli' ? 'CLI / Cron' : 'Web')
+//);
 
 foreach ($files as $file) {
     $path = $dir . DIRECTORY_SEPARATOR . $file;
@@ -111,8 +111,8 @@ foreach ($files as $file) {
 }
 
 /* ===== SCRAPER ENDE ===== */
-$endTime = date('Y-m-d H:i:s');
-sendStatusMail(
-    'Scraper abgeschlossen',
-    "Der Scraper-Lauf wurde abgeschlossen.\nZeit: $endTime"
-);
+//$endTime = date('Y-m-d H:i:s');
+//sendStatusMail(
+//    'Scraper abgeschlossen',
+//    "Der Scraper-Lauf wurde abgeschlossen.\nZeit: $endTime"
+//);

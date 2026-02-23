@@ -201,17 +201,25 @@ function filterAndRender() {
             const offsetIndex = positionOffsetMap.get(key) || 0;
             positionOffsetMap.set(key, offsetIndex + 1);
 
-            let hash = 0;
-            for (let i = 0; i < key.length; i++) {
-                hash = (hash * 31 + key.charCodeAt(i)) | 0;
-            }
-            const baseAngle = (hash % 360 + 360) % 360;
+            let latOffset = lat;
+            let lonOffset = lon;
 
-            const angle = (baseAngle + offsetIndex * 45) * (Math.PI / 180);
-            const ring = Math.floor(offsetIndex / 10);
-            const radius = 0.03 + 0.03 * ring;
-            const latOffset = lat + radius * Math.cos(angle);
-            const lonOffset = lon + radius * Math.sin(angle);
+            // Offset nur anwenden, wenn es bereits einen Marker an exakt derselben Position gibt
+            if (offsetIndex > 0) {
+                let hash = 0;
+                for (let i = 0; i < key.length; i++) {
+                    hash = (hash * 31 + key.charCodeAt(i)) | 0;
+                }
+                const baseAngle = (hash % 360 + 360) % 360;
+
+                const adjIndex = offsetIndex - 1;
+                const angle = (baseAngle + adjIndex * 45) * (Math.PI / 180);
+                const ring = Math.floor(adjIndex / 10);
+                const radius = 0.03 + 0.03 * ring;
+
+                latOffset = lat + radius * Math.cos(angle);
+                lonOffset = lon + radius * Math.sin(angle);
+            }
 
             const marker = L.marker([latOffset, lonOffset], {
                 icon: getColoredIcon()

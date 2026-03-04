@@ -71,6 +71,16 @@ foreach ($articles as $article) {
         continue;
     }
 
+    // OpenAI-Aufrufe vermeiden: niemals GPT für Artikel älter als 24h (auf Basis Listendatum)
+    if (!empty($article['list_date'])) {
+        $now = time();
+        $articleTs = strtotime($article['list_date'] . " 00:00:00 UTC");
+        if ($articleTs && ($now - $articleTs) > 86400) {
+            echo "[INFO] Artikel älter als 24h (Listendatum: {$article['list_date']}) – GPT wird übersprungen.\n";
+            continue;
+        }
+    }
+
     $contentHtml = @file_get_contents($article["url"]);
     if (!$contentHtml) {
         echo "[WARN] Artikel konnte nicht geladen werden: {$article['url']}\n";
@@ -129,6 +139,43 @@ foreach ($articles as $article) {
         }
 
         $contentText .= $line . "\n";
+    }
+
+    // Veröffentlichungsdatum bestimmen:
+    // 1) Von der Liste, falls vorhanden
+    $date = $article['list_date'] ?? null;
+
+    // 2) Falls nicht vorhanden, aus <time> im Artikel
+    if (!$date) {
+        $dateNode = $xp->query("//time[contains(@class,'date')]");
+        if ($dateNode->length > 0) {
+            $datetimeAttr = trim($dateNode[0]->getAttribute("datetime"));
+            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $datetimeAttr, $m)) {
+                $date = "{$m[1]}-{$m[2]}-{$m[3]}";
+                echo "[DEBUG] Veröffentlichungsdatum extrahiert: $date\n";
+            } else {
+                // Versuch über sichtbaren Text (DD.MM.YYYY)
+                $dateTxt = trim($dateNode[0]->textContent);
+                if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', $dateTxt, $m2)) {
+                    $date = "{$m2[3]}-{$m2[2]}-{$m2[1]}";
+                    echo "[DEBUG] Veröffentlichungsdatum (Text) extrahiert: $date\n";
+                }
+            }
+        }
+    }
+
+    // 3) Fallback auf heute (UTC)
+    if (!$date) {
+        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
+        $date = gmdate("Y-m-d");
+    }
+
+    // OpenAI-Aufrufe vermeiden: niemals GPT für Artikel älter als 24h (finaler Check nach Datums-Extraktion)
+    $now = time();
+    $articleTs = strtotime($date . " 00:00:00 UTC");
+    if ($articleTs && ($now - $articleTs) > 86400) {
+        echo "[INFO] Artikel älter als 24h (Datum: $date) – GPT wird übersprungen.\n";
+        continue;
     }
 
     // Schlüsselwörter prüfen
@@ -208,35 +255,6 @@ foreach ($articles as $article) {
     }
     if ($federal) {
         echo "[INFO] Bundesland: $federal\n";
-    }
-
-    // Veröffentlichungsdatum bestimmen:
-    // 1) Von der Liste, falls vorhanden
-    $date = $article['list_date'] ?? null;
-
-    // 2) Falls nicht vorhanden, aus <time> im Artikel
-    if (!$date) {
-        $dateNode = $xp->query("//time[contains(@class,'date')]");
-        if ($dateNode->length > 0) {
-            $datetimeAttr = trim($dateNode[0]->getAttribute("datetime"));
-            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $datetimeAttr, $m)) {
-                $date = "{$m[1]}-{$m[2]}-{$m[3]}";
-                echo "[DEBUG] Veröffentlichungsdatum extrahiert: $date\n";
-            } else {
-                // Versuch über sichtbaren Text (DD.MM.YYYY)
-                $dateTxt = trim($dateNode[0]->textContent);
-                if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', $dateTxt, $m2)) {
-                    $date = "{$m2[3]}-{$m2[2]}-{$m2[1]}";
-                    echo "[DEBUG] Veröffentlichungsdatum (Text) extrahiert: $date\n";
-                }
-            }
-        }
-    }
-
-    // 3) Fallback auf heute (UTC)
-    if (!$date) {
-        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
-        $date = gmdate("Y-m-d");
     }
 
     /* // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt

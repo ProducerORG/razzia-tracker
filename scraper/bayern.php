@@ -82,6 +82,44 @@ foreach ($articles as $article) {
     @$dom->loadHTML($contentHtml);
     $xpath = new DOMXPath($dom);
 
+    // Veröffentlichungsdatum (oft <time datetime=""> oder aus Detailseite extrahierbar)
+    $dateNode = $xpath->query("//time[@datetime]");
+    if ($dateNode->length > 0) {
+        $datetimeAttr = $dateNode[0]->getAttribute("datetime");
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $datetimeAttr, $matches)) {
+            $date = "{$matches[1]}-{$matches[2]}-{$matches[3]}";
+            $dateTime = null;
+            if (preg_match('/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.\d+)?(Z|[+\-]\d{2}:\d{2})?$/', $datetimeAttr, $m2)) {
+                $dateTime = $m2[1] . ($m2[2] ?? '');
+            } elseif (preg_match('/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(Z|[+\-]\d{2}:\d{2})?$/', $datetimeAttr, $m2)) {
+                $dateTime = $m2[1] . ':00' . ($m2[2] ?? '');
+            }
+        } else {
+            $date = gmdate("Y-m-d");
+            $dateTime = null;
+        }
+    } else {
+        $date = gmdate("Y-m-d");
+        $dateTime = null;
+    }
+
+    // OpenAI-Aufrufe vermeiden: niemals GPT für Artikel älter als 24h
+    $now = time();
+    $articleTs = null;
+
+    if (!empty($dateTime)) {
+        $articleTs = strtotime($dateTime);
+    }
+    if (!$articleTs && !empty($date)) {
+        // Fallback: nur Datum vorhanden -> Mitternacht UTC annehmen
+        $articleTs = strtotime($date . " 00:00:00 UTC");
+    }
+
+    if ($articleTs && ($now - $articleTs) > 86400) {
+        echo "[INFO] Artikel älter als 24h (Datum: $date) – GPT wird übersprungen.\n";
+        continue;
+    }
+
     // Bayern-Artikeltexte liegen in div.bp-text oder bp-article, oft Absätze <p>
     $paragraphs = $xpath->query("//div[contains(@class,'bp-text')]//p");
     if ($paragraphs->length === 0) {
@@ -139,41 +177,21 @@ foreach ($articles as $article) {
         $federal = getFederalState($lat, $lon);
     }
 
-        // Veröffentlichungsdatum (oft <time datetime=""> oder aus Detailseite extrahierbar)
-        $dateNode = $xpath->query("//time[@datetime]");
-        if ($dateNode->length > 0) {
-            $datetimeAttr = $dateNode[0]->getAttribute("datetime");
-            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $datetimeAttr, $matches)) {
-                $date = "{$matches[1]}-{$matches[2]}-{$matches[3]}";
-            } else {
-                $date = gmdate("Y-m-d");
-            }
-        } else {
-            $date = gmdate("Y-m-d");
-        }
-    
-    /* // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
-    $limitDate = date("Y-m-d", strtotime("-60 days"));
-    if (strtotime($date) < strtotime($limitDate)) {
-        echo "[INFO] Artikel zu alt (Datum: $date, Limit: $limitDate) – ignoriert.\n";
-        continue;
-    } */
-    
-        $summary = buildSummary($paragraphs);
-    
-        saveToSupabase(
-            $article["title"],
-            $summary,
-            $date,
-            $location,
-            $lat,
-            $lon,
-            $article["url"],
-            $federal,
-            $type
-        );
+    $summary = buildSummary($paragraphs);
 
-        $relevantCount++;
+    saveToSupabase(
+        $article["title"],
+        $summary,
+        $date,
+        $location,
+        $lat,
+        $lon,
+        $article["url"],
+        $federal,
+        $type
+    );
+
+    $relevantCount++;
 }
 
 echo "[INFO] Gesamt verarbeitete Artikel: $relevantCount\n";

@@ -106,6 +106,32 @@ foreach ($articles as $article) {
     @$dom2->loadHTML($contentHtml);
     $xpath2 = new DOMXPath($dom2);
 
+    // Veröffentlichungsdatum robust extrahieren
+    $date = extractPublishDate($xpath2);
+    echo "[DEBUG] Veröffentlichungsdatum: $date\n";
+
+    // OpenAI-Aufrufe vermeiden: niemals GPT für Artikel älter als 24h
+    $now = time();
+    $articleTs = null;
+
+    // Wenn ein <time datetime="..."> existiert, versuchen wir die Uhrzeit mitzunehmen.
+    $timeNode = $xpath2->query("//time[@datetime]");
+    if ($timeNode->length > 0) {
+        $datetimeAttr = $timeNode[0]->getAttribute("datetime");
+        if ($datetimeAttr) {
+            $articleTs = strtotime($datetimeAttr);
+        }
+    }
+    if (!$articleTs && !empty($date)) {
+        // Fallback: nur Datum vorhanden -> Mitternacht UTC annehmen
+        $articleTs = strtotime($date . " 00:00:00 UTC");
+    }
+
+    if ($articleTs && ($now - $articleTs) > 86400) {
+        echo "[INFO] Artikel älter als 24h (Datum: $date) – GPT wird übersprungen.\n";
+        continue;
+    }
+
     // Inhalt: verschiedene mögliche Container abdecken
     $paragraphs = $xpath2->query("//article//p");
     if ($paragraphs->length === 0) {
@@ -184,10 +210,6 @@ foreach ($articles as $article) {
         if ($federal) echo "[INFO] Bundesland (Fallback): $federal\n";
     }
     if ($federal) echo "[INFO] Bundesland: $federal\n";
-
-    // Veröffentlichungsdatum robust extrahieren
-    $date = extractPublishDate($xpath2);
-    echo "[DEBUG] Veröffentlichungsdatum: $date\n";
 
     /* // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
     $limitDate = date("Y-m-d", strtotime("-60 days"));

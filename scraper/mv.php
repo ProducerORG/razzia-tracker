@@ -142,6 +142,58 @@ foreach ($articles as $article) {
         continue;
     }
 
+    // Veröffentlichungsdatum robust extrahieren
+    // Detailseite hat i.d.R. <span class="dtstart">14.08.2025</span>
+    $date = null;
+    $dateNode = $xpath2->query("//span[contains(@class,'dtstart')]");
+    if ($dateNode->length > 0) {
+        $dateText = trim($dateNode->item(0)->textContent);
+        // dd.mm.yyyy -> yyyy-mm-dd
+        if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', $dateText, $m)) {
+            $date = "{$m[3]}-{$m[2]}-{$m[1]}";
+            echo "[DEBUG] Veröffentlichungsdatum extrahiert (Detail): $date\n";
+        }
+    }
+    if (!$date) {
+        // Versuch aus Meta im Dokumentenkopf
+        $metaDate = $xpath2->query("//meta[@property='article:published_time' or @name='date' or @name='publish-date' or @itemprop='datePublished']/@content");
+        if ($metaDate->length > 0) {
+            $dt = trim($metaDate->item(0)->nodeValue);
+            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $dt, $mx)) {
+                $date = "{$mx[1]}-{$mx[2]}-{$mx[3]}";
+                echo "[DEBUG] Veröffentlichungsdatum (Meta): $date\n";
+            }
+        }
+    }
+    if (!$date) {
+        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
+        $date = gmdate("Y-m-d");
+    }
+
+    // OpenAI-Aufrufe vermeiden: niemals GPT für Artikel älter als 24h
+    $now = time();
+    $articleTs = null;
+
+    if (!empty($dt)) {
+        $articleTs = strtotime($dt);
+    }
+    if (!$articleTs && !empty($date)) {
+        // Fallback: nur Datum vorhanden -> Mitternacht UTC annehmen
+        $articleTs = strtotime($date . " 00:00:00 UTC");
+    }
+
+    if ($articleTs && ($now - $articleTs) > 86400) {
+        echo "[INFO] Artikel älter als 24h (Datum: $date) – GPT wird übersprungen.\n";
+        continue;
+    }
+
+    /* // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
+    $limitDate = date("Y-m-d", strtotime("-60 days"));
+    if (strtotime($date) < strtotime($limitDate)) {
+        echo "[INFO] Artikel zu alt (Datum: $date, Limit: $limitDate) – ignoriert.\n";
+        continue;
+    } */
+
     // GPT-Metadaten
     $gptResult = extractMetadataWithGPT($contentText);
     if (!$gptResult || !is_array($gptResult) || ($gptResult['illegal'] ?? false) !== true) {
@@ -186,41 +238,6 @@ foreach ($articles as $article) {
         if ($federal) echo "[INFO] Bundesland (Koordinaten-Fallback): $federal\n";
     }
     if ($federal) echo "[INFO] Bundesland: $federal\n";
-
-    // Veröffentlichungsdatum robust extrahieren
-    // Detailseite hat i.d.R. <span class="dtstart">14.08.2025</span>
-    $date = null;
-    $dateNode = $xpath2->query("//span[contains(@class,'dtstart')]");
-    if ($dateNode->length > 0) {
-        $dateText = trim($dateNode->item(0)->textContent);
-        // dd.mm.yyyy -> yyyy-mm-dd
-        if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})$/', $dateText, $m)) {
-            $date = "{$m[3]}-{$m[2]}-{$m[1]}";
-            echo "[DEBUG] Veröffentlichungsdatum extrahiert (Detail): $date\n";
-        }
-    }
-    if (!$date) {
-        // Versuch aus Meta im Dokumentenkopf
-        $metaDate = $xpath2->query("//meta[@property='article:published_time' or @name='date' or @name='publish-date' or @itemprop='datePublished']/@content");
-        if ($metaDate->length > 0) {
-            $dt = trim($metaDate->item(0)->nodeValue);
-            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $dt, $mx)) {
-                $date = "{$mx[1]}-{$mx[2]}-{$mx[3]}";
-                echo "[DEBUG] Veröffentlichungsdatum (Meta): $date\n";
-            }
-        }
-    }
-    if (!$date) {
-        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
-        $date = gmdate("Y-m-d");
-    }
-
-    /* // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
-    $limitDate = date("Y-m-d", strtotime("-60 days"));
-    if (strtotime($date) < strtotime($limitDate)) {
-        echo "[INFO] Artikel zu alt (Datum: $date, Limit: $limitDate) – ignoriert.\n";
-        continue;
-    } */
 
     $summary = buildSummary($paragraphs);
 

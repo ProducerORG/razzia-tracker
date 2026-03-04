@@ -485,6 +485,47 @@ foreach ($articles as $article) {
         continue;
     }
 
+    // Veröffentlichungsdatum so früh wie möglich bestimmen, dann GPT für >24h alte Artikel verhindern
+    $date = null;
+    $dateTime = null;
+
+    $dateNode = $xpath2->query("//time[@datetime]")->item(0);
+    if ($dateNode) {
+        $datetimeAttr = $dateNode->getAttribute("datetime");
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/',$datetimeAttr,$m)) {
+            $date = "{$m[1]}-{$m[2]}-{$m[3]}";
+            echo "[DEBUG] Veröffentlichungsdatum (Artikel): $date\n";
+        }
+        if ($datetimeAttr) {
+            $dateTime = $datetimeAttr;
+        }
+    }
+    if (!$date && !empty($article['rssDate'])) {
+        $date = $article['rssDate'];
+        echo "[DEBUG] Veröffentlichungsdatum (Fallback): $date\n";
+    }
+    if (!$date) {
+        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
+        $date = gmdate("Y-m-d");
+    }
+
+    // OpenAI-Aufrufe vermeiden: niemals GPT für Artikel älter als 24h
+    $now = time();
+    $articleTs = null;
+
+    if (!empty($dateTime)) {
+        $articleTs = strtotime($dateTime);
+    }
+    if (!$articleTs && !empty($date)) {
+        // Fallback: nur Datum vorhanden -> Mitternacht UTC annehmen
+        $articleTs = strtotime($date . " 00:00:00 UTC");
+    }
+
+    if ($articleTs && ($now - $articleTs) > 86400) {
+        echo "[INFO] Artikel älter als 24h (Datum: $date) – GPT wird übersprungen.\n";
+        continue;
+    }
+
     $gptResult = extractMetadataWithGPT($contentText);
     if (!$gptResult || !is_array($gptResult) || ($gptResult['illegal'] ?? false) !== true) {
         echo "[INFO] Kein Fall von illegalem Glücksspiel – Artikel verworfen: {$article['title']} | {$article['url']}\n";
@@ -523,24 +564,6 @@ foreach ($articles as $article) {
         if ($federal) echo "[INFO] Bundesland (Koordinaten-Fallback): $federal\n";
     }
     if ($federal) echo "[INFO] Bundesland: $federal\n";
-
-    $date = null;
-    $dateNode = $xpath2->query("//time[@datetime]")->item(0);
-    if ($dateNode) {
-        $datetimeAttr = $dateNode->getAttribute("datetime");
-        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/',$datetimeAttr,$m)) {
-            $date = "{$m[1]}-{$m[2]}-{$m[3]}";
-            echo "[DEBUG] Veröffentlichungsdatum (Artikel): $date\n";
-        }
-    }
-    if (!$date && !empty($article['rssDate'])) {
-        $date = $article['rssDate'];
-        echo "[DEBUG] Veröffentlichungsdatum (Fallback): $date\n";
-    }
-    if (!$date) {
-        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
-        $date = gmdate("Y-m-d");
-    }
 
     /* // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
     $limitDate = date("Y-m-d", strtotime("-60 days"));

@@ -257,6 +257,22 @@ foreach ($articles as $article) {
     @$dom2->loadHTML($contentHtml);
     $xpath2 = new DOMXPath($dom2);
 
+    // Veröffentlichungsdatum
+    $date = extractIsoDate($xpath2);
+    if ($date) echo "[DEBUG] Veröffentlichungsdatum extrahiert: $date\n";
+    else {
+        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
+        $date = gmdate("Y-m-d");
+    }
+
+    // OpenAI-Aufrufe vermeiden: niemals GPT für Artikel älter als 24h
+    $now = time();
+    $articleTs = strtotime($date . " 00:00:00 UTC");
+    if ($articleTs && ($now - $articleTs) > 86400) {
+        echo "[INFO] Artikel älter als 24h (Datum: $date) – GPT wird übersprungen.\n";
+        continue;
+    }
+
     // Inhalt extrahieren (verschiedene Layoutvarianten + Paywall)
     $paragraphs = $xpath2->query("//div[contains(@class,'article__detail__content')]//p");
     if ($paragraphs->length === 0) {
@@ -332,14 +348,6 @@ foreach ($articles as $article) {
         if ($federal) echo "[INFO] Bundesland (Koordinaten-Fallback): $federal\n";
     }
     if ($federal) echo "[INFO] Bundesland: $federal\n";
-
-    // Veröffentlichungsdatum
-    $date = extractIsoDate($xpath2);
-    if ($date) echo "[DEBUG] Veröffentlichungsdatum extrahiert: $date\n";
-    else {
-        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
-        $date = gmdate("Y-m-d");
-    }
 
     /* // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
     $limitDate = date("Y-m-d", strtotime("-60 days"));

@@ -333,6 +333,73 @@ foreach ($articles as $article) {
         continue;
     }
 
+    // Veröffentlichungsdatum:
+    // 1) aus Listing (Format z.B. "14.08.2025 15:44 Uhr") -> in Y-m-d umwandeln
+    // 2) aus <meta name="dcterms.date"> oder <time datetime=""> auf Artikel-Seite
+    $date = null;
+    $dateTime = null;
+
+    if (!empty($article['list_date'])) {
+        $d = trim(preg_replace('/\s*Uhr$/', '', $article['list_date']));
+        $d = preg_replace('/\s+/', ' ', $d);
+        // Erwartet "dd.mm.yyyy hh:mm"
+        if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})/', $d, $m)) {
+            $date = "{$m[3]}-{$m[2]}-{$m[1]}";
+            $dateTime = "{$m[3]}-{$m[2]}-{$m[1]} {$m[4]}:{$m[5]}:00";
+            echo "[DEBUG] Datum (Listing) extrahiert: $date\n";
+        }
+    }
+    if (!$date) {
+        $meta = $xp2->query("//meta[@name='dcterms.date']")->item(0);
+        if ($meta) {
+            $dateRaw = $meta->getAttribute('content');
+            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?/', $dateRaw, $m)) {
+                $date = "{$m[1]}-{$m[2]}-{$m[3]}";
+                if (!empty($m[4]) && !empty($m[5])) {
+                    $sec = !empty($m[6]) ? $m[6] : "00";
+                    $dateTime = "{$m[1]}-{$m[2]}-{$m[3]} {$m[4]}:{$m[5]}:$sec";
+                }
+                echo "[DEBUG] Datum (Meta) extrahiert: $date\n";
+            }
+        }
+    }
+    if (!$date) {
+        $timeNode = $xp2->query("//time[@datetime]")->item(0);
+        if ($timeNode) {
+            $dt = $timeNode->getAttribute("datetime");
+            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?(Z|[+\-]\d{2}:\d{2})?$/', $dt, $m)) {
+                $date = "{$m[1]}-{$m[2]}-{$m[3]}";
+                if (!empty($m[4]) && !empty($m[5])) {
+                    $sec = !empty($m[6]) ? $m[6] : "00";
+                    $tz  = !empty($m[7]) ? $m[7] : "";
+                    $dateTime = "{$m[1]}-{$m[2]}-{$m[3]}T{$m[4]}:{$m[5]}:$sec" . $tz;
+                }
+                echo "[DEBUG] Datum (time) extrahiert: $date\n";
+            }
+        }
+    }
+    if (!$date) {
+        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
+        $date = gmdate("Y-m-d");
+    }
+
+    // OpenAI-Aufrufe minimieren: niemals GPT für Artikel älter als 24h
+    $now = time();
+    $articleTs = null;
+
+    if (!empty($dateTime)) {
+        $articleTs = strtotime($dateTime);
+    }
+    if (!$articleTs && !empty($date)) {
+        // Fallback: nur Datum vorhanden -> Mitternacht UTC annehmen
+        $articleTs = strtotime($date . " 00:00:00 UTC");
+    }
+
+    if ($articleTs && ($now - $articleTs) > 86400) {
+        echo "[INFO] Artikel älter als 24h (Datum: $date) – GPT wird übersprungen.\n";
+        continue;
+    }
+
     // GPT-Metadaten
     $gptResult = $extractMetadataWithGPT($contentText);
     if (!$gptResult || !is_array($gptResult) || ($gptResult['illegal'] ?? false) !== true) {
@@ -377,44 +444,6 @@ foreach ($articles as $article) {
         if ($federal) echo "[INFO] Bundesland (Koordinaten-Fallback): $federal\n";
     }
     if ($federal) echo "[INFO] Bundesland: $federal\n";
-
-    // Veröffentlichungsdatum:
-    // 1) aus Listing (Format z.B. "14.08.2025 15:44 Uhr") -> in Y-m-d umwandeln
-    // 2) aus <meta name="dcterms.date"> oder <time datetime=""> auf Artikel-Seite
-    $date = null;
-    if (!empty($article['list_date'])) {
-        $d = trim(preg_replace('/\s*Uhr$/', '', $article['list_date']));
-        $d = preg_replace('/\s+/', ' ', $d);
-        // Erwartet "dd.mm.yyyy hh:mm"
-        if (preg_match('/^(\d{2})\.(\d{2})\.(\d{4})\s+\d{2}:\d{2}/', $d, $m)) {
-            $date = "{$m[3]}-{$m[2]}-{$m[1]}";
-            echo "[DEBUG] Datum (Listing) extrahiert: $date\n";
-        }
-    }
-    if (!$date) {
-        $meta = $xp2->query("//meta[@name='dcterms.date']")->item(0);
-        if ($meta) {
-            $dateRaw = $meta->getAttribute('content');
-            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $dateRaw, $m)) {
-                $date = "{$m[1]}-{$m[2]}-{$m[3]}";
-                echo "[DEBUG] Datum (Meta) extrahiert: $date\n";
-            }
-        }
-    }
-    if (!$date) {
-        $timeNode = $xp2->query("//time[@datetime]")->item(0);
-        if ($timeNode) {
-            $dt = $timeNode->getAttribute("datetime");
-            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $dt, $m)) {
-                $date = "{$m[1]}-{$m[2]}-{$m[3]}";
-                echo "[DEBUG] Datum (time) extrahiert: $date\n";
-            }
-        }
-    }
-    if (!$date) {
-        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
-        $date = gmdate("Y-m-d");
-    }
 
     /* // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
     $limitDate = date("Y-m-d", strtotime("-60 days"));

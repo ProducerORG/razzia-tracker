@@ -113,6 +113,66 @@ foreach ($articles as $article) {
         continue;
     }
 
+    // Veröffentlichungsdatum:
+    // 1) Versuche auf Detailseite einen Datums-Container zu finden
+    // 2) Regex-Fallback (dd.mm.yyyy) im gesamten Dokument
+    $date = null;
+
+    // Für 24h-Grenze (wenn time@datetime vorhanden)
+    $dateTime = null;
+
+    // Spezifische Box aus Listen-/Detailansicht
+    $dateNode = $xpath2->query("//div[contains(@class,'tx-rssdisplay-item-meta-date')] | //p[contains(@class,'date')] | //time");
+    if ($dateNode->length > 0) {
+        $raw = trim($dateNode[0]->textContent);
+        $date = extractDateYmd($raw);
+        if ($date) echo "[DEBUG] Veröffentlichungsdatum (Box): $date\n";
+    }
+    if (!$date) {
+        // time datetime-Attribut (falls vorhanden)
+        $timeAttrNode = $xpath2->query("//time[@datetime]");
+        if ($timeAttrNode->length > 0) {
+            $dt = $timeAttrNode[0]->getAttribute("datetime");
+            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $dt, $m)) {
+                $date = "{$m[1]}-{$m[2]}-{$m[3]}";
+                echo "[DEBUG] Veröffentlichungsdatum (time@datetime): $date\n";
+
+                // möglichst exakt für 24h-Vergleich
+                if (preg_match('/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.\d+)?(Z|[+\-]\d{2}:\d{2})?$/', $dt, $m2)) {
+                    $dateTime = $m2[1] . ($m2[2] ?? '');
+                } elseif (preg_match('/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(Z|[+\-]\d{2}:\d{2})?$/', $dt, $m2)) {
+                    $dateTime = $m2[1] . ':00' . ($m2[2] ?? '');
+                }
+            }
+        }
+    }
+    if (!$date) {
+        // globaler Regex-Fallback
+        $date = extractDateYmd($contentHtml);
+        if ($date) echo "[DEBUG] Veröffentlichungsdatum (Regex): $date\n";
+    }
+    if (!$date) {
+        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
+        $date = gmdate("Y-m-d");
+    }
+
+    // OpenAI-Aufrufe vermeiden: niemals GPT für Artikel älter als 24h
+    $now = time();
+    $articleTs = null;
+
+    if (!empty($dateTime)) {
+        $articleTs = strtotime($dateTime);
+    }
+    if (!$articleTs && !empty($date)) {
+        // Fallback: nur Datum vorhanden -> Mitternacht UTC annehmen
+        $articleTs = strtotime($date . " 00:00:00 UTC");
+    }
+
+    if ($articleTs && ($now - $articleTs) > 86400) {
+        echo "[INFO] Artikel älter als 24h (Datum: $date) – GPT wird übersprungen.\n";
+        continue;
+    }
+
     // GPT-Metadaten
     $gptResult = extractMetadataWithGPT($contentText);
     if (!$gptResult || !is_array($gptResult) || ($gptResult['illegal'] ?? false) !== true) {
@@ -151,39 +211,6 @@ foreach ($articles as $article) {
         if ($federal) echo "[INFO] Bundesland (Koordinaten-Fallback): $federal\n";
     }
     if ($federal) echo "[INFO] Bundesland: $federal\n";
-
-    // Veröffentlichungsdatum:
-    // 1) Versuche auf Detailseite einen Datums-Container zu finden
-    // 2) Regex-Fallback (dd.mm.yyyy) im gesamten Dokument
-    $date = null;
-
-    // Spezifische Box aus Listen-/Detailansicht
-    $dateNode = $xpath2->query("//div[contains(@class,'tx-rssdisplay-item-meta-date')] | //p[contains(@class,'date')] | //time");
-    if ($dateNode->length > 0) {
-        $raw = trim($dateNode[0]->textContent);
-        $date = extractDateYmd($raw);
-        if ($date) echo "[DEBUG] Veröffentlichungsdatum (Box): $date\n";
-    }
-    if (!$date) {
-        // time datetime-Attribut (falls vorhanden)
-        $timeAttrNode = $xpath2->query("//time[@datetime]");
-        if ($timeAttrNode->length > 0) {
-            $dt = $timeAttrNode[0]->getAttribute("datetime");
-            if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $dt, $m)) {
-                $date = "{$m[1]}-{$m[2]}-{$m[3]}";
-                echo "[DEBUG] Veröffentlichungsdatum (time@datetime): $date\n";
-            }
-        }
-    }
-    if (!$date) {
-        // globaler Regex-Fallback
-        $date = extractDateYmd($contentHtml);
-        if ($date) echo "[DEBUG] Veröffentlichungsdatum (Regex): $date\n";
-    }
-    if (!$date) {
-        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
-        $date = gmdate("Y-m-d");
-    }
 
     /* // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
     $limitDate = date("Y-m-d", strtotime("-60 days"));

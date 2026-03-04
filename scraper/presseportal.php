@@ -105,6 +105,39 @@ foreach ($articles as $article) {
         continue;
     }
 
+    // Robuste Extraktion des Veröffentlichungsdatums aus dem <time datetime="">
+    $dateNode = $xpath2->query("//p[contains(@class,'date')]/time");
+    if ($dateNode->length > 0) {
+        $datetimeAttr = $dateNode[0]->getAttribute("datetime"); // Format: 2025-07-02 10:30:01
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $datetimeAttr, $matches)) {
+            $date = "{$matches[1]}-{$matches[2]}-{$matches[3]}";
+            echo "[DEBUG] Veröffentlichungsdatum extrahiert: $date\n";
+        } else {
+            echo "[WARN] Datum nicht interpretierbar, Fallback auf heute\n";
+            $date = gmdate("Y-m-d");
+        }
+    } else {
+        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
+        $date = gmdate("Y-m-d");
+    }
+
+    // OpenAI-Aufrufe vermeiden: niemals GPT für Artikel älter als 24h
+    $now = time();
+    $articleTs = null;
+
+    if (!empty($datetimeAttr)) {
+        $articleTs = strtotime($datetimeAttr);
+    }
+    if (!$articleTs && !empty($date)) {
+        // Fallback: nur Datum vorhanden -> Mitternacht UTC annehmen
+        $articleTs = strtotime($date . " 00:00:00 UTC");
+    }
+
+    if ($articleTs && ($now - $articleTs) > 86400) {
+        echo "[INFO] Artikel älter als 24h (Datum: $date) – GPT wird übersprungen.\n";
+        continue;
+    }
+
     $contentText = "";
     foreach ($paragraphs as $p) {
         $line = trim($p->textContent);
@@ -195,22 +228,6 @@ foreach ($articles as $article) {
 
     if ($federal) {
         echo "[INFO] Bundesland: $federal\n";
-    }
-
-    // Robuste Extraktion des Veröffentlichungsdatums aus dem <time datetime="">
-    $dateNode = $xpath2->query("//p[contains(@class,'date')]/time");
-    if ($dateNode->length > 0) {
-        $datetimeAttr = $dateNode[0]->getAttribute("datetime"); // Format: 2025-07-02 10:30:01
-        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $datetimeAttr, $matches)) {
-            $date = "{$matches[1]}-{$matches[2]}-{$matches[3]}";
-            echo "[DEBUG] Veröffentlichungsdatum extrahiert: $date\n";
-        } else {
-            echo "[WARN] Datum nicht interpretierbar, Fallback auf heute\n";
-            $date = gmdate("Y-m-d");
-        }
-    } else {
-        echo "[WARN] Veröffentlichungsdatum nicht gefunden, Fallback auf heute\n";
-        $date = gmdate("Y-m-d");
     }
  
     /* // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt

@@ -110,6 +110,37 @@ foreach ($articles as $article) {
     $h1 = $xp2->query("//h1")->item(0);
     $title = $h1 ? trim(preg_replace('/\s+/', ' ', $h1->textContent)) : $article['title'];
 
+    // Veröffentlichungsdatum (früh ziehen, um GPT für alte Artikel zu verhindern)
+    $date = extractDateBB($xp2, $contentHtml);
+    echo "[DEBUG][BB] Veröffentlichungsdatum: $date\n";
+
+    // OpenAI-Aufrufe vermeiden: niemals GPT für Artikel älter als 24h
+    $now = time();
+    $articleTs = null;
+
+    // wenn <time datetime> existiert, exakte Zeit nutzen (falls vorhanden)
+    $timeNode = $xp2->query("//time[@datetime]")->item(0);
+    if ($timeNode) {
+        $dtAttr = $timeNode->getAttribute('datetime');
+        if (preg_match('/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.\d+)?(Z|[+\-]\d{2}:\d{2})?$/', $dtAttr, $m2)) {
+            $articleTs = strtotime($m2[1] . ($m2[2] ?? ''));
+        } elseif (preg_match('/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(Z|[+\-]\d{2}:\d{2})?$/', $dtAttr, $m2)) {
+            $articleTs = strtotime($m2[1] . ':00' . ($m2[2] ?? ''));
+        } elseif (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $dtAttr, $m2)) {
+            $articleTs = strtotime("{$m2[1]}-{$m2[2]}-{$m2[3]} 00:00:00 UTC");
+        }
+    }
+
+    // Fallback: nur Datum -> Mitternacht UTC
+    if (!$articleTs && !empty($date)) {
+        $articleTs = strtotime($date . " 00:00:00 UTC");
+    }
+
+    if ($articleTs && ($now - $articleTs) > 86400) {
+        echo "[INFO][BB] Artikel älter als 24h (Datum: $date) – GPT wird übersprungen: $detailUrl\n";
+        continue;
+    }
+
     // Fließtext robust einsammeln
     $paragraphs = $xp2->query(
         "(" .
@@ -191,10 +222,6 @@ foreach ($articles as $article) {
         if ($federal) echo "[INFO][BB] Bundesland (Fallback): $federal\n";
     }
     if ($federal) echo "[INFO][BB] Bundesland: $federal\n";
-
-    // Veröffentlichungsdatum
-    $date = extractDateBB($xp2, $contentHtml);
-    echo "[DEBUG][BB] Veröffentlichungsdatum: $date\n";
 
     /* // Artikel ignorieren, wenn Datum vor dem 1. Juli 2025 liegt
     $limitDate = date("Y-m-d", strtotime("-60 days"));
